@@ -1,0 +1,14 @@
+{
+  "python.defaultInterpreterPath": "E:\\DevTools\\anaconda3\\envs\\opf311\\python.exe",
+  "python.condaPath": "E:\\DevTools\\anaconda3\\Scripts\\conda.exe",
+  "python.terminal.activateEnvironment": true,
+  "jupyter.jupyterServerType": "local",
+  "jupyter.notebookFileRoot": "${fileDirname}",
+  "jupyter.interactiveWindow.creationMode": "perFile",
+  // Reduce false positives from dynamic modeling libraries (Pyomo) in notebooks
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportAttributeAccessIssue": "none",
+    "reportUnknownMemberType": "none"
+  }
+}
