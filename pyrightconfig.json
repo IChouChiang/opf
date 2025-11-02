@@ -1,0 +1,19 @@
+{
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "reportMissingImports": "warning",
+  "reportUnusedImport": "warning",
+  "exclude": [
+    "**/.venv",
+    "**/venv",
+    "**/env",
+    "**/__pycache__",
+    "**/.ipynb_checkpoints",
+    "**/site-packages"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "./"
+    }
+  ]
+}

@@ -7,6 +7,17 @@
   "jupyter.interactiveWindow.creationMode": "perFile",
   // Reduce false positives from dynamic modeling libraries (Pyomo) in notebooks
   "python.analysis.typeCheckingMode": "basic",
+  // Only analyze files you have open to avoid noise from libraries and stubs
+  "python.analysis.diagnosticMode": "openFilesOnly",
+  // Exclude common generated/3rd-party folders from analysis
+  "python.analysis.exclude": [
+    "**/.venv/**",
+    "**/venv/**",
+    "**/env/**",
+    "**/__pycache__/**",
+    "**/.ipynb_checkpoints/**",
+    "**/site-packages/**"
+  ],
   "python.analysis.diagnosticSeverityOverrides": {
     "reportAttributeAccessIssue": "none",
     "reportUnknownMemberType": "none"
