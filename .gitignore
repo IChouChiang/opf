@@ -133,3 +133,8 @@ dmypy.json
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Project-specific
+Week3/IEEE_118_bus_test_system.xlsx
+Week3/Week 3 Description.md
+Week3/samples/
