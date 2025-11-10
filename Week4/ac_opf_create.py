@@ -35,15 +35,13 @@ def ac_opf_create():
 
     # Convenience set: generators located at each bus (computed from GEN_BUS)
     # Use initialize with None and define via BuildAction or constraint rules
-    m.GENS_AT_BUS = pyo.Set(
-        m.BUS, within=m.GEN, doc="Generators located at bus i"
-    )
-    
+    m.GENS_AT_BUS = pyo.Set(m.BUS, within=m.GEN, doc="Generators located at bus i")
+
     def _init_gens_at_bus(mm):
         # BuildAction to populate GENS_AT_BUS after instance data is loaded
         for i in mm.BUS:
             mm.GENS_AT_BUS[i] = [g for g in mm.GEN if mm.GEN_BUS[g] == i]
-    
+
     m.InitGensAtBus = pyo.BuildAction(rule=_init_gens_at_bus)
 
     # ===== Parameters =====
@@ -170,7 +168,7 @@ def ac_opf_create():
     # Final objective: minimize total generation cost (use rule to defer iteration)
     def _obj_rule(mm):
         return pyo.quicksum(mm.FCOST[g] for g in mm.GEN)
-    
+
     m.TotalCost = pyo.Objective(rule=_obj_rule, sense=pyo.minimize)
 
     # ===== Power balance constraints (per bus) =====

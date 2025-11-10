@@ -65,7 +65,7 @@ def ppc_to_g_b(
     """
     # Convert to internal bus numbering (0-based consecutive)
     ppc_int = ext2int(ppc)
-    
+
     baseMVA = float(ppc_int["baseMVA"])
     bus = ppc_int["bus"]
     branch = ppc_int["branch"]

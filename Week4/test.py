@@ -188,12 +188,12 @@ def solve_pyomo_with_gurobi(ppc: dict):
         instance,
         tee=True,
         options={
-            "NonConvex": 2,      # Enable non-convex quadratic optimization
-            "MIPGap": 1e-2,      # Relax gap to 1% (faster convergence)
-            "Threads": 8,        # Use 8 threads (safe for overnight, leaves cores for system)
+            "NonConvex": 2,  # Enable non-convex quadratic optimization
+            "MIPGap": 1e-2,  # Relax gap to 1% (faster convergence)
+            "Threads": 8,  # Use 8 threads (safe for overnight, leaves cores for system)
             "TimeLimit": 28800,  # 8 hours max (28800 seconds)
-            "NodeLimit": 100000, # Stop after 100k nodes if not converged
-            "MIPFocus": 1,       # Focus on finding feasible solutions quickly
+            "NodeLimit": 100000,  # Stop after 100k nodes if not converged
+            "MIPFocus": 1,  # Focus on finding feasible solutions quickly
         },
     )
 
