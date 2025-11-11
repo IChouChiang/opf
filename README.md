@@ -20,10 +20,13 @@ opf/
 ├─ Week3/              # ML prediction: DCOPF → MLP, case118
 │   ├─ samples/        # Training data (chunked .npz)
 │   └─ results/        # Trained models
-├─ Week4/              # AC-OPF: nonlinear formulation, case39
+├─ Week4/              # AC-OPF: nonlinear formulation
 │   ├─ ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
-│   ├─ test.py                # Solver harness (Gurobi NonConvex)
-│   └─ case39_baseline.py     # PYPOWER runopf reference
+│   ├─ helpers_ac_opf.py      # Shared helpers: data prep, init, solve wrapper
+│   ├─ test.py                # IEEE 39-bus harness (uses helpers)
+│   ├─ test2.py               # IEEE 57-bus harness (uses helpers)
+│   ├─ case39_baseline.py     # PYPOWER runopf reference (39-bus)
+│   └─ case57_baseline.py     # PYPOWER runopf reference (57-bus)
 ├─ .github/
 │   └─ copilot-instructions.md
 ├─ pyrightconfig.json
@@ -40,14 +43,16 @@ conda activate opf311
 ```
 
 ### Week 4 AC-OPF (Current)
-Run the IEEE 39-bus AC-OPF model:
+Run the AC-OPF models:
 ```bash
-python Week4/test.py
+python Week4/test.py    # IEEE 39-bus
+python Week4/test2.py   # IEEE 57-bus
 ```
 
 Baseline comparison (PYPOWER):
 ```bash
 python Week4/case39_baseline.py
+python Week4/case57_baseline.py
 ```
 
 ---
@@ -60,6 +65,11 @@ python Week4/case39_baseline.py
 - **Nonlinear power balance:** Bilinear constraints using admittance matrix G, B from PYPOWER's `makeYbus`
 - **Voltage magnitude limits:** (Vmin)² ≤ e² + f² ≤ (Vmax)²
 - **Gurobi NonConvex solver:** MIQCP with spatial branching, half CPU cores, 3-minute time limit, 3% MIP gap
+
+### Shared helpers (Week4/helpers_ac_opf.py)
+- `prepare_ac_opf_data(ppc)`: ext2int, Ybus→G/B, per-unit scaling, cost params
+- `initialize_voltage_from_flatstart(instance, ppc_int)`: set e/f from Vm/Va
+- `solve_ac_opf(ppc, verbose=True, time_limit=180, mip_gap=0.03, threads=None)`: build, init (PG/QG, slack fix), solve
 
 ### Results (IEEE 39-bus)
 - **Objective:** 41872.30 $/hr (vs PYPOWER 41864.18, ~0.02% difference)
