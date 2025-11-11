@@ -141,19 +141,45 @@ def prepare_ac_opf_data(ppc):
     data[None]["pw_x"] = pw_x_dict
     data[None]["pw_y"] = pw_y_dict
     
-    # Legacy a, b, c parameters (for backward compatibility, extract from polynomial)
+    # Legacy a, b, c parameters mapped for our fixed quadratic objective.
+    # Important: PYPOWER gencost polynomial is defined with PG in MW and cost in $/hr.
+    # Our variables use PG in p.u. on baseMVA. To preserve $/hr, scale coefficients as:
+    #   a_pu = a_native * baseMVA^2,  b_pu = b_native * baseMVA,  c_pu = c_native
     a_dict = {}
     b_dict = {}
     c_dict = {}
-    for g in range(n_gen):
-        if cost_model_dict[g] == 2 and n_cost_dict[g] >= 3:
-            # Assume quadratic: a*P^2 + b*P + c
-            c_dict[g] = cost_coeff_dict.get((g, 0), 0.0)
-            b_dict[g] = cost_coeff_dict.get((g, 1), 0.0)
-            a_dict[g] = cost_coeff_dict.get((g, 2), 0.0)
-        else:
-            a_dict[g] = 0.0
-            b_dict[g] = 40.0
+    if gencost is not None and gencost.shape[0] > 0:
+        for g in range(n_gen):
+            model = int(gencost[g, 0])
+            n = int(gencost[g, 3])
+            if model == 2:  # polynomial
+                # tail = [c_{n-1}, ..., c_0]
+                coeffs = [float(gencost[g, 4 + k]) for k in range(n)]
+                # Extract quadratic, linear, constant by degree
+                c2 = 0.0
+                c1 = 0.0
+                c0 = 0.0
+                for pos, c_native in enumerate(coeffs):
+                    deg = (n - 1) - pos
+                    if deg == 2:
+                        c2 = c_native
+                    elif deg == 1:
+                        c1 = c_native
+                    elif deg == 0:
+                        c0 = c_native
+                a_dict[g] = c2 * (baseMVA ** 2)
+                b_dict[g] = c1 * baseMVA
+                c_dict[g] = c0
+            else:
+                # Piecewise costs are not used in fixed quadratic objective; simple fallback
+                a_dict[g] = 0.0
+                b_dict[g] = 40.0 * baseMVA
+                c_dict[g] = 0.0
+    else:
+        # No gencost - use default coefficients in $/hr with PG in p.u. (approximate)
+        for g in range(n_gen):
+            a_dict[g] = 0.01 * (baseMVA ** 2)
+            b_dict[g] = 40.0 * baseMVA
             c_dict[g] = 0.0
     
     data[None]["a"] = a_dict
@@ -337,8 +363,12 @@ if __name__ == "__main__":
             pg_raw = pyo.value(instance.PG[g], exception=False)
             pg = float(pg_raw) if pg_raw is not None else 0.0
             total_pg += pg
-            bus_idx = pyo.value(instance.GEN_BUS[g])
-            print(f"  Gen {g} (Bus {bus_idx}): {pg:.4f}")
+            bus_idx_val = pyo.value(instance.GEN_BUS[g], exception=False)
+            bus_idx_internal = int(bus_idx_val) if bus_idx_val is not None else 0
+            # Display external, 1-based bus numbering as in PYPOWER cases
+            bus_label = bus_idx_internal + 1
+            gen_label = int(g) + 1
+            print(f"  Gen {gen_label} (Bus {bus_label}): {pg:.4f}")
         
         print(f"\nTotal Generation: {total_pg:.4f} p.u.")
         
@@ -364,7 +394,8 @@ if __name__ == "__main__":
             if e_val is None or f_val is None:
                 continue
             Vm = float(np.sqrt(e_val**2 + f_val**2))
-            print(f"  Bus {i}: {Vm:.4f} p.u.")
+            # Display 1-based external bus numbering
+            print(f"  Bus {int(i)+1}: {Vm:.4f} p.u.")
             shown += 1
     
     print("\nDone!")
