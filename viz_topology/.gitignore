@@ -1,0 +1,13 @@
+# Ignore generated visualization files
+*.png
+*.jpg
+*.pdf
+*.svg
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
