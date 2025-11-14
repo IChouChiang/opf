@@ -137,8 +137,9 @@ instance, result = solve_ac_opf(ppc, verbose=True)
 3. **Cost coefficient scaling:** Use `a = c2·baseMVA²`, `b = c1·baseMVA`, `c = c0` for quadratic objective with PG in p.u. to preserve $/hr units
 4. **Pyomo instance vs model:** ALWAYS call `create_instance()` before solving; AbstractModel is just a template
 5. **Gencost row order:** Must match `ppc["gen"]` row order (one cost per generator)
-6. **Slack bus symmetry:** Fix slack bus voltage (e,f) to eliminate rotational degree of freedom in AC-OPF
-7. **Duplicate helpers:** Use `helpers_ac_opf.py` shared functions instead of copy-pasting prepare/init/solve logic
+6. **Missing gencost:** If no `gencost` array provided, `prepare_ac_opf_data()` raises `UserWarning` and uses defaults (c2=0.01, c1=40.0, c0=0.0 in p.u. scaling)
+7. **Slack bus symmetry:** Fix slack bus voltage (e,f) to eliminate rotational degree of freedom in AC-OPF
+8. **Duplicate helpers:** Use `helpers_ac_opf.py` shared functions instead of copy-pasting prepare/init/solve logic
 
 ## Week 4 Test Results
 

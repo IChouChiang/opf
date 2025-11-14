@@ -21,6 +21,7 @@ Notes
 - Slack bus (type == 3) voltage is fixed to remove rotational symmetry.
 """
 from __future__ import annotations
+import warnings
 import numpy as np
 import multiprocessing
 import pyomo.environ as pyo
@@ -143,6 +144,12 @@ def prepare_ac_opf_data(ppc):
                     pw_y_dict[(g, k)] = y_cost
     else:
         # Fallback default polynomial if no gencost provided
+        warnings.warn(
+            "No gencost data found in PYPOWER case. Using default quadratic cost "
+            "coefficients: c2=0.01, c1=40.0, c0=0.0 (in p.u. scaling).",
+            UserWarning,
+            stacklevel=2
+        )
         for g in range(n_gen):
             cost_model_dict[g] = 2
             n_cost_dict[g] = 3
@@ -184,6 +191,7 @@ def prepare_ac_opf_data(ppc):
                 b_dict[g] = 40.0 * baseMVA
                 c_dict[g] = 0.0
     else:
+        # Warning already issued above in the cost_coeff section
         for g in range(n_gen):
             a_dict[g] = 0.01 * (baseMVA**2)
             b_dict[g] = 40.0 * baseMVA

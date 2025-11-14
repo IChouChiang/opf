@@ -68,6 +68,7 @@ python Week4/case57_baseline.py
 
 ### Shared helpers (Week4/helpers_ac_opf.py)
 - `prepare_ac_opf_data(ppc)`: ext2int, Ybus→G/B, per-unit scaling, cost params
+  - **Warning:** Raises `UserWarning` if no `gencost` data found, uses defaults (c2=0.01, c1=40.0, c0=0.0)
 - `initialize_voltage_from_flatstart(instance, ppc_int)`: set e/f from Vm/Va
 - `solve_ac_opf(ppc, verbose=True, time_limit=180, mip_gap=0.03, threads=None)`: build, init (PG/QG, slack fix), solve
 
