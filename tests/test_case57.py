@@ -1,7 +1,11 @@
-# test2.py - Load case57 and solve AC-OPF
+# test_case57.py - Load case57 and solve AC-OPF
 """
 pyright: reportAttributeAccessIssue=false, reportIndexIssue=false, reportGeneralTypeIssues=false
 """
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import numpy as np
 import pyomo.environ as pyo

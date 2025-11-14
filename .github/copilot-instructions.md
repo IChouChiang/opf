@@ -58,25 +58,36 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 ```
 Week2/
   ├── case9.py          # PYPOWER case files (data)
-  ├── Week2.ipynb       # Exploratory notebook
+  └── Week2.ipynb       # Exploratory notebook
   
 Week3/
   ├── Week3.ipynb       # ML training notebook
   ├── samples/          # Training data (git-ignored if large)
   └── results/          # Model outputs (git-ignored)
 
-Week4/
-  ├── ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
-  ├── helpers_ac_opf.py      # Shared helpers: prepare_ac_opf_data, initialize_voltage_from_flatstart, solve_ac_opf
-  ├── test.py                # IEEE 39-bus test harness
-  ├── test2.py               # IEEE 57-bus test harness
-  ├── case39_baseline.py     # PYPOWER reference solution
-  └── case57_baseline.py     # PYPOWER reference solution
+src/
+  ├── __init__.py             # Package initialization
+  ├── ac_opf_create.py        # Pyomo AbstractModel (Cartesian voltages)
+  ├── helpers_ac_opf.py       # AC-OPF helpers (data prep, init, solve)
+  ├── topology_viz.py         # Static network visualization
+  └── interactive_viz.py      # Interactive network visualization (PyVis)
+
+tests/
+  ├── test_case39.py          # IEEE 39-bus AC-OPF test harness
+  ├── test_case57.py          # IEEE 57-bus AC-OPF test harness
+  ├── case39_baseline.py      # PYPOWER reference (39-bus)
+  └── case57_baseline.py      # PYPOWER reference (57-bus)
+
+outputs/                      # Generated files (git-ignored)
 ```
 
-### Running AC-OPF (Week 4)
+### Running AC-OPF (Week 4 / tests/)
 **Quick run (uses shared helpers):**
 ```python
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 from pypower.api import case39
 from helpers_ac_opf import solve_ac_opf
 
@@ -84,16 +95,14 @@ ppc = case39()
 instance, result = solve_ac_opf(ppc, verbose=True)
 ```
 
-**Manual workflow:**
-1. Import case: `from pypower.api import case39; ppc = case39()`
-2. Build abstract model: `m = ac_opf_create()`
-3. Prepare instance data: `data, ppc_int = prepare_ac_opf_data(ppc)`  (from `helpers_ac_opf`)
-4. Create instance: `instance = m.create_instance(data=data)`
-5. Initialize: `initialize_voltage_from_flatstart(instance, ppc_int)` + warm-start PG/QG + fix slack bus
-6. Solve: `solver = pyo.SolverFactory('gurobi'); result = solver.solve(instance, tee=True)`
-   - Gurobi options: `NonConvex=2`, `Threads=half_cpus`, `TimeLimit=180`, `MIPGap=0.03`
+**From command line:**
+```bash
+cd tests
+python test_case39.py  # IEEE 39-bus
+python test_case57.py  # IEEE 57-bus
+```
 
-**Shared helpers in `Week4/helpers_ac_opf.py`:**
+**Shared helpers in `src/helpers_ac_opf.py`:**
 - `prepare_ac_opf_data(ppc)`: ext2int → makeYbus → G/B extraction → cost scaling → Pyomo data dict
 - `initialize_voltage_from_flatstart(instance, ppc_int)`: set e/f from Vm/Va, return slack bus index
 - `solve_ac_opf(ppc, verbose=True, time_limit=180, mip_gap=0.03, threads=None)`: full pipeline with warm start & slack fixing
@@ -138,20 +147,20 @@ instance, result = solve_ac_opf(ppc, verbose=True)
 4. **Pyomo instance vs model:** ALWAYS call `create_instance()` before solving; AbstractModel is just a template
 5. **Gencost row order:** Must match `ppc["gen"]` row order (one cost per generator)
 6. **Missing gencost:** If no `gencost` array provided, `prepare_ac_opf_data()` raises `UserWarning` and uses defaults (c2=0.01, c1=40.0, c0=0.0 in p.u. scaling)
-7. **Slack bus symmetry:** Fix slack bus voltage (e,f) to eliminate rotational degree of freedom in AC-OPF
-8. **Duplicate helpers:** Use `helpers_ac_opf.py` shared functions instead of copy-pasting prepare/init/solve logic
+6. **Slack bus symmetry:** Fix slack bus voltage (e,f) to eliminate rotational degree of freedom in AC-OPF
+7. **Duplicate helpers:** Use `src/helpers_ac_opf.py` shared functions instead of copy-pasting prepare/init/solve logic
 
 ## Week 4 Test Results
 
-### IEEE 39-bus (test.py)
+### IEEE 39-bus (tests/test_case39.py)
 - **Objective:** 41872.30 $/hr (PYPOWER baseline: 41864.18 $/hr, ~0.02% gap)
 - **Solve time:** ~2s (optimal within 3% MIP gap)
 - **Total generation:** 62.98 p.u., **Demand:** 62.54 p.u., **Losses:** 0.44 p.u.
 - **Voltage range:** 1.010–1.052 p.u.
 
-### IEEE 57-bus (test2.py)
+### IEEE 57-bus (tests/test_case57.py)
 - **Objective:** 41770.00 $/hr (found feasible solution within 3% gap)
-- **Solve time:** ~163s (explored 1446 nodes)
+- **Solve time:** ~130s (explored 1446 nodes)
 - **Total generation:** 12.68 p.u., **Demand:** 12.51 p.u., **Losses:** 0.17 p.u.
 - **Voltage range:** 0.976–1.040 p.u.
 

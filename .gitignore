@@ -140,3 +140,10 @@ Week3/Week 3 Description.md
 Week3/samples/
 Week3/results/
 Week3/~$*.xlsx
+
+# Outputs directory
+outputs/
+*.html
+
+# Overnight/long-running test results
+overnight_results.txt

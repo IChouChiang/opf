@@ -20,13 +20,17 @@ opf/
 ├─ Week3/              # ML prediction: DCOPF → MLP, case118
 │   ├─ samples/        # Training data (chunked .npz)
 │   └─ results/        # Trained models
-├─ Week4/              # AC-OPF: nonlinear formulation
+├─ src/                # Reusable modules
 │   ├─ ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
-│   ├─ helpers_ac_opf.py      # Shared helpers: data prep, init, solve wrapper
-│   ├─ test.py                # IEEE 39-bus harness (uses helpers)
-│   ├─ test2.py               # IEEE 57-bus harness (uses helpers)
-│   ├─ case39_baseline.py     # PYPOWER runopf reference (39-bus)
-│   └─ case57_baseline.py     # PYPOWER runopf reference (57-bus)
+│   ├─ helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
+│   ├─ topology_viz.py        # Static network visualization
+│   └─ interactive_viz.py     # Interactive visualization (PyVis)
+├─ tests/              # Test harnesses and baselines
+│   ├─ test_case39.py         # IEEE 39-bus AC-OPF
+│   ├─ test_case57.py         # IEEE 57-bus AC-OPF
+│   ├─ case39_baseline.py     # PYPOWER reference (39-bus)
+│   └─ case57_baseline.py     # PYPOWER reference (57-bus)
+├─ outputs/            # Generated files (git-ignored)
 ├─ .github/
 │   └─ copilot-instructions.md
 ├─ pyrightconfig.json
@@ -43,16 +47,17 @@ conda activate opf311
 ```
 
 ### Week 4 AC-OPF (Current)
-Run the AC-OPF models:
+Run the AC-OPF test harnesses:
 ```bash
-python Week4/test.py    # IEEE 39-bus
-python Week4/test2.py   # IEEE 57-bus
+cd tests
+python test_case39.py   # IEEE 39-bus
+python test_case57.py   # IEEE 57-bus
 ```
 
 Baseline comparison (PYPOWER):
 ```bash
-python Week4/case39_baseline.py
-python Week4/case57_baseline.py
+python case39_baseline.py
+python case57_baseline.py
 ```
 
 ---
@@ -66,17 +71,14 @@ python Week4/case57_baseline.py
 - **Voltage magnitude limits:** (Vmin)² ≤ e² + f² ≤ (Vmax)²
 - **Gurobi NonConvex solver:** MIQCP with spatial branching, half CPU cores, 3-minute time limit, 3% MIP gap
 
-### Shared helpers (Week4/helpers_ac_opf.py)
+### Shared helpers (src/helpers_ac_opf.py)
 - `prepare_ac_opf_data(ppc)`: ext2int, Ybus→G/B, per-unit scaling, cost params
-  - **Warning:** Raises `UserWarning` if no `gencost` data found, uses defaults (c2=0.01, c1=40.0, c0=0.0)
 - `initialize_voltage_from_flatstart(instance, ppc_int)`: set e/f from Vm/Va
 - `solve_ac_opf(ppc, verbose=True, time_limit=180, mip_gap=0.03, threads=None)`: build, init (PG/QG, slack fix), solve
 
-### Results (IEEE 39-bus)
-- **Objective:** 41872.30 $/hr (vs PYPOWER 41864.18, ~0.02% difference)
-- **Total generation:** 62.98 p.u., **Demand:** 62.54 p.u., **Losses:** 0.44 p.u.
-- **Voltage range:** 1.010–1.052 p.u. (all within limits)
-- **Solve time:** ~2 seconds (optimal within tolerance)
+### Results (tests/)
+- **IEEE 39-bus:** 41872.30 $/hr (vs PYPOWER 41864.18, ~0.02% gap), ~2s solve
+- **IEEE 57-bus:** 41770.00 $/hr (~1% gap), ~130s solve
 
 ### Technical Notes
 - Cost scaling: For PG in per-unit, use `a = c2·baseMVA²`, `b = c1·baseMVA`, `c = c0` to preserve $/hr units

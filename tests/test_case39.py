@@ -1,14 +1,14 @@
-# test.py - Load case39 and solve AC-OPF
+# test_case39.py - Load case39 and solve AC-OPF
 # pyright: reportAttributeAccessIssue=false, reportIndexIssue=false, reportGeneralTypeIssues=false
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import numpy as np
 import pyomo.environ as pyo
 from pypower.api import case39
-from helpers_ac_opf import (
-    prepare_ac_opf_data,
-    initialize_voltage_from_flatstart,
-    solve_ac_opf,
-)
+from helpers_ac_opf import solve_ac_opf
 
 
 if __name__ == "__main__":
