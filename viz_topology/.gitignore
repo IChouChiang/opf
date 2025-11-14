@@ -3,6 +3,7 @@
 *.jpg
 *.pdf
 *.svg
+*.html
 
 # Python cache
 __pycache__/
