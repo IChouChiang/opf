@@ -8,6 +8,13 @@
   // Pylance type checking and excludes are controlled in pyrightconfig.json
   // Only analyze files you have open to avoid noise from libraries and stubs
   "python.analysis.diagnosticMode": "openFilesOnly",
+  // Exclude Week3 from Pylance analysis
+  "python.analysis.exclude": [
+    "**/Week3/**"
+  ],
+  "python.analysis.ignore": [
+    "**/Week3/**"
+  ],
   // Use Black as the default Python formatter
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter",

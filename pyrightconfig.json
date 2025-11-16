@@ -9,7 +9,9 @@
     "**/env",
     "**/__pycache__",
     "**/.ipynb_checkpoints",
-    "**/site-packages"
+    "**/site-packages",
+    "**/Week3/**",
+    "Week3/Week3.ipynb"
   ],
   "executionEnvironments": [
     {
