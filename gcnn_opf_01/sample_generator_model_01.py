@@ -124,9 +124,10 @@ class SampleGeneratorModel01:
         if not self.allow_negative_pd:
             pd_raw = np.clip(pd_raw, 0.0, None)
 
-        # Keep QD/PD ratio from base (simple approximation)
-        ratio_qp = self.QD_base / (self.PD_base + 1e-8)
-        qd_raw = ratio_qp * pd_raw
+        # Calculate original power factor (QD/PD ratio) from base case
+        # This will be applied to final adjusted PD to get consistent QD
+        power_factor_ratio = self.QD_base / (self.PD_base + 1e-8)
+        qd_raw = power_factor_ratio * pd_raw
 
         # ----- 2) RES sampling: wind + PV → available power -----
         # Initialize zero available power
@@ -188,7 +189,8 @@ class SampleGeneratorModel01:
         if not self.allow_negative_pd:
             pd = np.clip(pd, 0.0, None)  # enforce non-negative if flag False
 
-        qd = qd_raw  # assume RES Q = 0
+        # Recalculate QD based on final PD to maintain consistent power factor
+        qd = power_factor_ratio * pd
 
         # ----- 5) Return scenario dict -----
         return {

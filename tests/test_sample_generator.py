@@ -1,14 +1,17 @@
 import sys
 from pathlib import Path
+import multiprocessing
 
-# Make gcnn_opf_01 importable
+# Make gcnn_opf_01 and src importable
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "gcnn_opf_01"))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import numpy as np  # noqa: E402
 from sample_config_model_01 import (  # noqa: E402
     load_case39_int,
     get_res_bus_indices,
+    apply_topology,
     SIGMA_REL_LOAD,
     LAM_WIND,
     K_WIND,
@@ -20,10 +23,15 @@ from sample_config_model_01 import (  # noqa: E402
     G_STC,
 )
 from sample_generator_model_01 import SampleGeneratorModel01  # noqa: E402
+from helpers_ac_opf import solve_ac_opf  # noqa: E402
 
 
 def main():
     print("=== Sample Generator Test ===\n")
+
+    # Get CPU count for parallel solving
+    n_cpus = multiprocessing.cpu_count()
+    print(f"System CPUs: {n_cpus} (will use all for Gurobi)")
 
     # Load case39
     ppc_int, baseMVA, bus, gen, branch, N_BUS, N_GEN, N_BRANCH = load_case39_int()
@@ -69,6 +77,7 @@ def main():
 
     # Generate 3 samples for topology 0 (base case)
     print("\n=== Generating 3 samples for topology 0 ===")
+    samples_data = []
     for i in range(3):
         sample = gen_obj.sample_scenario(topology_id=0)
 
@@ -89,7 +98,9 @@ def main():
         neg_total = pd[neg_mask].sum() if n_neg > 0 else 0.0
 
         print(f"\nSample {i+1}:")
-        print(f"  Total load (after RES): {total_load:.3f} p.u.")
+        print(
+            f"  Total load (after RES): PD={total_load:.3f} p.u., QD={qd.sum():.3f} p.u."
+        )
         print(f"  Total RES available (raw): {total_res_avail:.3f} p.u.")
         print(f"  Injected RES (scaled): {injected_res:.3f} p.u.")
         print(f"  Penetration (method 1): {penetration_injected*100:.1f}%")
@@ -98,6 +109,58 @@ def main():
         print(
             f"  Negative PD buses: {n_neg} (min pd = {min_pd:.3f} p.u., sum negative = {neg_total:.3f} p.u.)"
         )
+
+        samples_data.append(sample)
+
+    # Solve AC-OPF for each sample
+    print("\n=== Solving AC-OPF for generated scenarios ===")
+    for i, sample in enumerate(samples_data):
+        print(f"\n--- Sample {i+1} AC-OPF ---")
+
+        # Build modified ppc with scenario loads
+        ppc_scenario = apply_topology(ppc_int, 0)  # topo_id=0 (base case)
+
+        # Update bus demands (convert from p.u. back to MW/MVAr for PYPOWER)
+        ppc_scenario["bus"][:, 2] = sample["pd"] * baseMVA  # PD in MW
+        ppc_scenario["bus"][:, 3] = sample["qd"] * baseMVA  # QD in MVAr
+
+        try:
+            # Enable verbose for sample 2 to debug
+            verbose_mode = i == 1
+            instance, result = solve_ac_opf(
+                ppc_scenario,
+                verbose=verbose_mode,
+                time_limit=180,
+                mip_gap=0.03,
+                threads=n_cpus,
+            )
+
+            # Extract solution summary
+            term_cond = str(result.solver.termination_condition)
+            if term_cond == "optimal" or (
+                hasattr(result.solver, "status")
+                and "ok" in str(result.solver.status).lower()
+            ):
+                from pyomo.environ import value
+
+                total_gen = sum(value(instance.PG[g]) for g in instance.GEN)
+                total_cost = value(instance.TotalCost)
+
+                print(f"  Status: {term_cond}")
+                print(f"  Objective: {total_cost:.2f} $/hr")
+                print(f"  Total generation: {total_gen:.3f} p.u.")
+                print(
+                    f"  Total demand: PD={sample['pd'].sum():.3f} p.u., QD={sample['qd'].sum():.3f} p.u."
+                )
+                print(f"  Losses: {total_gen - sample['pd'].sum():.3f} p.u.")
+            else:
+                print(f"  Status: {term_cond}")
+                print("  Solution not optimal")
+
+        except Exception as e:
+            import traceback
+
+            print(f"  ERROR: {e}")
 
     print("\n=== Test PASSED ===")
 

@@ -148,7 +148,7 @@ def prepare_ac_opf_data(ppc):
             "No gencost data found in PYPOWER case. Using default quadratic cost "
             "coefficients: c2=0.01, c1=40.0, c0=0.0 (in p.u. scaling).",
             UserWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         for g in range(n_gen):
             cost_model_dict[g] = 2
@@ -270,8 +270,26 @@ def solve_ac_opf(ppc, verbose=True, time_limit=180, mip_gap=0.03, threads=None):
     gen = ppc_int["gen"]
     baseMVA = float(ppc_int["baseMVA"])
     for g in instance.GEN:
-        instance.PG[g].value = float(gen[g, 1]) / baseMVA
-        instance.QG[g].value = float(gen[g, 2]) / baseMVA
+        # Clip initial values to respect variable bounds
+        pg_init = float(gen[g, 1]) / baseMVA
+        qg_init = float(gen[g, 2]) / baseMVA
+
+        # Get bounds from the instance
+        pg_lb, pg_ub = instance.PG[g].bounds
+        qg_lb, qg_ub = instance.QG[g].bounds
+
+        # Clip to bounds if they exist
+        if pg_lb is not None:
+            pg_init = max(pg_init, pg_lb)
+        if pg_ub is not None:
+            pg_init = min(pg_init, pg_ub)
+        if qg_lb is not None:
+            qg_init = max(qg_init, qg_lb)
+        if qg_ub is not None:
+            qg_init = min(qg_init, qg_ub)
+
+        instance.PG[g].value = pg_init
+        instance.QG[g].value = qg_init
 
     # Fix slack bus voltage (remove rotational symmetry)
     if slack_bus is not None:
@@ -301,12 +319,22 @@ def solve_ac_opf(ppc, verbose=True, time_limit=180, mip_gap=0.03, threads=None):
         print("-" * 60)
     try:
         result = solver.solve(instance, tee=verbose)
-    except ValueError as e:  # Some environments raise early errors before solve info
+    except (
+        ValueError,
+        Exception,
+    ) as e:  # Some environments raise early errors before solve info
         if verbose:
-            print("Solver raised ValueError (likely preprocessing failure):", e)
-        result = pyo.SolverResults()
-        result.solver.status = pyo.SolverStatus.aborted
-        result.solver.termination_condition = pyo.TerminationCondition.error
+            print(f"Solver raised exception (likely preprocessing failure): {e}")
+
+        # Create a minimal result-like object for error reporting
+        class ErrorResult:
+            class Solver:
+                status = "error"
+                termination_condition = "error"
+
+            solver = Solver()
+
+        result = ErrorResult()
 
     if verbose:
         print("-" * 60)

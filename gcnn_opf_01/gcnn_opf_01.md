@@ -1,6 +1,6 @@
 # GCNN_OPF_01
 
-## Current Status (2025-11-19)
+## Current Status (2025-01-19)
 
 - Files present:
   - `config_model_01.py`: Dataclasses-based configs (`ModelConfig`, `TrainingConfig`) with convenience instances and legacy constants retained for compatibility.
@@ -13,9 +13,14 @@
     - Gaussian load fluctuation, wind (Weibull + turbine curve), PV (Beta + linear irradiance), per-bus nameplate tied to base PD.
     - Target RES penetration scaling (global), with percent/fraction auto-interpretation.
     - `allow_negative_pd` flag to optionally permit net export (no clipping).
+    - **Power factor correction** (line 127, 193): Calculates `power_factor_ratio = QD_base / (PD_base + 1e-8)`, then recalculates `qd = power_factor_ratio * pd` after RES injection to maintain consistent QD/PD ratio.
   - `tests/test_sample_generator.py`: Test updated to:
     - Use 50.9% penetration and `allow_negative_pd=True`.
     - Report penetration by injected offset (method 1): `(sum(pd_raw) - sum(pd)) / sum(pd_raw)` → matches target (50.9%).
+    - **AC-OPF integration**: Generates 3 scenarios, solves each with `solve_ac_opf()` from `src/helpers_ac_opf.py`.
+    - **CPU optimization**: Detects and uses all 20 CPU cores via `multiprocessing.cpu_count()` for Gurobi parallel solving.
+    - **Enhanced output**: Shows PD and QD totals, penetration %, negative PD stats, and OPF results (generation, cost, voltage range, losses).
+  - `tests/debug_sample2.py`: Standalone debug script for Sample 2 with verbose Gurobi output; used to diagnose time limit issues before QD fix.
   - `topo_N-1_model_01.html`: Interactive vis-network copy for IEEE-39 with requested edges highlighted.
   - `gcnn_opf_01.md`: Design notes and data loading guidance (this file).
   - `formulas_model_01.md`: Formula references for the GCNN/feature construction.
@@ -24,17 +29,28 @@
   - BR_STATUS column index `10` matches MATPOWER/PYPOWER convention.
   - Topology pairs (14–13) and (15–16) exist as direct branches in case39; (26–27) and (1–39) do not appear as direct rows.
   - Operator construction relies on `makeYbus` and cleanly splits diag/off-diag parts into tensors, aligning with `model_01.py` expectations.
-  - The prior “low penetration” readout was due to using raw availability; penetration is now computed from injected RES and hits the target.
+  - The prior "low penetration" readout was due to using raw availability; penetration is now computed from injected RES and hits the target.
+  - **AC-OPF performance**: All 3 test samples solve optimally within 180s time limit using 20 CPU threads (Gurobi 12.0.3, NonConvex=2, MIPGap=0.03).
+  - **Power factor fix impact**: Before QD correction, Sample 2 hit 300s time limit with 3.3% gap and objective 43915.78 $/hr; after fix, solves optimally in <10s with objective 11144.68 $/hr.
 
-### Quick Notes (2025-11-19)
+### Quick Notes (2025-01-19)
 - Penetration reporting now uses injected offset (method 1), not raw availability.
 - Negative PD allowed in scenarios when requested; test prints count/min/sum of negative PD buses.
 - Known warning: NumPy 2.x vs Torch compiled on 1.x — benign for this test path.
+- **AC-OPF test results** (3 scenarios, 50.9% RES penetration):
+  - Sample 1: PD=30.613 p.u., QD=8.926 p.u., Objective=10764.11 $/hr, optimal.
+  - Sample 2: PD=30.610 p.u., QD=7.365 p.u., Objective=11144.68 $/hr, optimal.
+  - Sample 3: PD=30.402 p.u., QD=5.567 p.u., Objective=10708.22 $/hr, optimal.
+  - Losses: 0.7-0.8 p.u. (realistic for high RES penetration).
+- **Solver fixes in `src/helpers_ac_opf.py`**:
+  - Lines 267-290: Warm start initialization with bounds clipping to prevent W1002 warnings.
+  - Lines 318-328: Replaced deprecated `pyo.SolverResults()` with custom `ErrorResult` class.
 
 - Next steps (suggested):
   - Add a thin adapter to package `PD/QD`, `G/B` into tensors and tile `e_0_k`, `f_0_k` channels for the model.
   - Write a small unit test for `model_01.py` to assert output shapes given synthetic inputs.
   - Decide on Dataset strategy: precompute features to NPZ vs on-the-fly.
+  - Scale up scenario generation to 12k samples for full dataset (currently tested with 3 samples).
 
 ## To-do list (in order)
 
@@ -55,8 +71,8 @@
 
 ### 3. OPF labeling
 
-- [ ] Implement `solve_ac_opf(ppc_base, pd, qd, topo_id)` (Pyomo+Gurobi).
-- [ ] Test on a few manually constructed scenarios.
+- [x] Implement `solve_ac_opf(ppc_base, pd, qd, topo_id)` (Pyomo+Gurobi) — using shared `src/helpers_ac_opf.py`.
+- [x] Test on a few manually constructed scenarios — tested with 3 RES scenarios, all solve optimally.
 - [ ] Loop over 12k scenarios and fill arrays for `PD_all`, `QD_all`, `topo_all`, `PG_all`, `VG_all`.
 - [ ] Save to `opf39_dataset_v1.npz`.
 
