@@ -9,6 +9,13 @@
     - `TOPOLOGY_BRANCH_PAIRS_1BASED` with topo IDs 0–4.
     - `apply_topology(ppc_int, topo_id)` sets `branch[:, 10]` (BR_STATUS) to 0 for outages.
     - `build_G_B_operators(ppc_int)` returns `G, B, g_diag, b_diag, g_ndiag, b_ndiag` as `torch.float32` tensors.
+  - `sample_generator_model_01.py`: Scenario generator completed with:
+    - Gaussian load fluctuation, wind (Weibull + turbine curve), PV (Beta + linear irradiance), per-bus nameplate tied to base PD.
+    - Target RES penetration scaling (global), with percent/fraction auto-interpretation.
+    - `allow_negative_pd` flag to optionally permit net export (no clipping).
+  - `tests/test_sample_generator.py`: Test updated to:
+    - Use 50.9% penetration and `allow_negative_pd=True`.
+    - Report penetration by injected offset (method 1): `(sum(pd_raw) - sum(pd)) / sum(pd_raw)` → matches target (50.9%).
   - `topo_N-1_model_01.html`: Interactive vis-network copy for IEEE-39 with requested edges highlighted.
   - `gcnn_opf_01.md`: Design notes and data loading guidance (this file).
   - `formulas_model_01.md`: Formula references for the GCNN/feature construction.
@@ -17,6 +24,12 @@
   - BR_STATUS column index `10` matches MATPOWER/PYPOWER convention.
   - Topology pairs (14–13) and (15–16) exist as direct branches in case39; (26–27) and (1–39) do not appear as direct rows.
   - Operator construction relies on `makeYbus` and cleanly splits diag/off-diag parts into tensors, aligning with `model_01.py` expectations.
+  - The prior “low penetration” readout was due to using raw availability; penetration is now computed from injected RES and hits the target.
+
+### Quick Notes (2025-11-19)
+- Penetration reporting now uses injected offset (method 1), not raw availability.
+- Negative PD allowed in scenarios when requested; test prints count/min/sum of negative PD buses.
+- Known warning: NumPy 2.x vs Torch compiled on 1.x — benign for this test path.
 
 - Next steps (suggested):
   - Add a thin adapter to package `PD/QD`, `G/B` into tensors and tile `e_0_k`, `f_0_k` channels for the model.
@@ -25,19 +38,18 @@
 
 ## To-do list (in order)
 
-Putting it all together:
-
 ### 1. Network & config
 
-- [ ] Write `sample_config_model_01.py` (load `case39`, compute basic metadata).
-- [ ] Decide 5 line contingencies and implement `apply_topology(ppc_int, topo_id)`.
+- [x] Write `sample_config_model_01.py` (load `case39`, compute basic metadata).
+- [x] Decide 5 line contingencies and implement `apply_topology(ppc_int, topo_id)`.
 
 ---
 
 ### 2. Scenario Generator
 
-- [ ] Implement `ScenarioGenerator` with load fluctuation, RES sampling, target penetration, and RES-as-negative-leak.
-- [ ] Debug for a handful of samples (check total PD, RES penetration, etc.).
+- [x] Implement scenario generator with fluctuation, RES sampling, target scaling, RES-as-negative-load, and `allow_negative_pd` flag.
+- [x] Debug on multiple samples; penetration (method 1) matches target 50.9%.
+- [ ] Optional: expose `P_res_injected` per bus in sample dict (currently derivable via `pd_raw - pd`).
 
 ---
 
