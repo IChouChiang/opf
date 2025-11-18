@@ -21,13 +21,13 @@ except Exception:
     cfg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cfg)  # type: ignore[attr-defined]
 
-from pypower.api import case39  # noqa: E402
+from pypower.api import case6ww  # noqa: E402
 from pypower.ext2int import ext2int  # noqa: E402
 
 
 def main():
     # Build internal-numbered case once (base topology)
-    ppc = case39()
+    ppc = case6ww()
     ppc_int_base = ext2int(ppc)
 
     branch = ppc_int_base["branch"]
@@ -35,7 +35,7 @@ def main():
     tbus = branch[:, 1].astype(int)
     BR_STATUS_COL = 10
 
-    print("=== Topology outage verification (IEEE-39) ===")
+    print("=== Topology outage verification (case6ww) ===")
 
     for topo_id in [1, 2, 3, 4]:
         pairs = cfg.TOPOLOGY_BRANCH_PAIRS_1BASED.get(topo_id, [])

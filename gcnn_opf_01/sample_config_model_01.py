@@ -1,33 +1,33 @@
 import numpy as np
 import torch
 
-from pypower.api import case39, ext2int, makeYbus  # adjust import path if needed
+from pypower.api import case6ww, ext2int, makeYbus  # adjust import path if needed
 
 # ---------- Topology definition (1-based bus pairs) ----------
 
 # We treat topo_id = 0 as the base (no outage).
-# The tuples are (from_bus, to_bus) in the IEEE-39 bus numbering (1-based).
+# The tuples are (from_bus, to_bus) in the case6ww bus numbering (1-based external).
 TOPOLOGY_BRANCH_PAIRS_1BASED = {
     0: [],  # base case: no line outage
-    1: [(26, 27)],
-    2: [(14, 13)],
-    3: [(15, 16)],
-    4: [(1, 39)],
+    1: [(5, 2)],
+    2: [(1, 2)],
+    3: [(2, 3)],
+    4: [(5, 6)],
 }
 
 # ---------- RES bus configuration ----------
-# These are external bus IDs (bus_i) from case39.py.
+# These are external bus IDs (bus_i) from case6ww.py.
 # After ext2int(), map to internal 0-based indices using get_res_bus_indices()
-RES_BUS_WIND_EXTERNAL = [27, 25, 18, 20, 7]  # External bus_i
-RES_BUS_PV_EXTERNAL = [15, 12, 24, 29, 21]  # External bus_i
+RES_BUS_WIND_EXTERNAL = [5]  # External bus_i (bus 5 has wind)
+RES_BUS_PV_EXTERNAL = [4, 6]  # External bus_i (buses 4 and 6 have PV)
 
 
 def get_res_bus_indices(ppc_int):
     """
     Map external bus IDs to internal 0-based indices after ext2int().
 
-    For case39, buses are numbered 1-39 consecutively, so after ext2int
-    they map to 0-38 in the same order (bus_i - 1 = internal_index).
+    For case6ww, buses are numbered 1-6 consecutively, so after ext2int
+    they map to 0-5 in the same order (bus_i - 1 = internal_index).
 
     Args:
         ppc_int: internal-indexed case (after ext2int)
@@ -46,7 +46,7 @@ def get_res_bus_indices(ppc_int):
         wind_indices = [int(e2i[bus_id]) for bus_id in RES_BUS_WIND_EXTERNAL]
         pv_indices = [int(e2i[bus_id]) for bus_id in RES_BUS_PV_EXTERNAL]
     else:
-        # Fallback: case39 has consecutive bus numbering 1-39
+        # Fallback: case6ww has consecutive bus numbering 1-6
         wind_indices = [b - 1 for b in RES_BUS_WIND_EXTERNAL]
         pv_indices = [b - 1 for b in RES_BUS_PV_EXTERNAL]
 
@@ -71,9 +71,9 @@ BETA_PV = 2.5  # Beta distribution beta
 G_STC = 1000.0  # standard test condition irradiance (W/m²)
 
 
-def load_case39_int():
+def load_case6ww_int():
     """
-    Load IEEE 39-bus test system and convert to internal indexing
+    Load case6ww test system (6-bus Wood & Wollenberg) and convert to internal indexing
     using PYPOWER's ext2int.
 
     Returns:
@@ -84,7 +84,7 @@ def load_case39_int():
         branch  : np.ndarray [N_BRANCH, ...]
         N_BUS, N_GEN, N_BRANCH : ints
     """
-    ppc = case39()
+    ppc = case6ww()
     ppc_int = ext2int(ppc)
 
     baseMVA = float(ppc_int["baseMVA"])
@@ -101,8 +101,11 @@ def load_case39_int():
 
 def find_branch_indices_for_pairs(ppc_int, pairs_1based):
     """
-    Given a list of (from_bus, to_bus) pairs (1-based bus numbers),
+    Given a list of (from_bus, to_bus) pairs (1-based external bus numbers),
     find branch row indices in ppc_int["branch"] that connect those buses.
+
+    Converts 1-based external bus IDs to 0-based internal indices using
+    the e2i mapping from ppc_int["order"]["bus"]["e2i"].
 
     Returns:
         idx_list: list[int] of branch row indices (0-based)
@@ -111,15 +114,28 @@ def find_branch_indices_for_pairs(ppc_int, pairs_1based):
     fbus = branch[:, 0].astype(int)
     tbus = branch[:, 1].astype(int)
 
+    # Get external-to-internal bus mapping
+    if "order" in ppc_int and "bus" in ppc_int["order"]:
+        e2i = ppc_int["order"]["bus"]["e2i"]
+    else:
+        # Fallback: assume consecutive numbering (bus_i -> i-1)
+        e2i = {i: i - 1 for i in range(1, len(fbus) + 10)}
+
     idx_list = []
 
-    for fb, tb in pairs_1based:
-        # find rows where (fbus==fb and tbus==tb) or (fbus==tb and tbus==fb)
-        mask = ((fbus == fb) & (tbus == tb)) | ((fbus == tb) & (tbus == fb))
+    for fb_ext, tb_ext in pairs_1based:
+        # Convert external 1-based to internal 0-based
+        fb_int = int(e2i[fb_ext])
+        tb_int = int(e2i[tb_ext])
+
+        # find rows where (fbus==fb_int and tbus==tb_int) or (fbus==tb_int and tbus==fb_int)
+        mask = ((fbus == fb_int) & (tbus == tb_int)) | (
+            (fbus == tb_int) & (tbus == fb_int)
+        )
         rows = np.where(mask)[0]
 
-        # In IEEE-39, each line should be unique; we expect 1 row per pair.
-        # But if there can be multiple parallel lines, we might keep all.
+        # In case6ww, some branch pairs may have parallel lines.
+        # We keep all matching rows.
         for r in rows:
             idx_list.append(int(r))
 
@@ -203,14 +219,14 @@ def build_G_B_operators(ppc_int):
 def get_operators_for_topology(topo_id):
     """
     Convenience wrapper:
-        1) load case39
+        1) load case6ww
         2) apply topology topo_id
         3) compute G/B and z-operators
 
     Returns:
         ppc_int, G, B, g_diag, b_diag, g_ndiag, b_ndiag
     """
-    ppc_int_base, baseMVA, bus, gen, branch, N_BUS, N_GEN, N_BRANCH = load_case39_int()
+    ppc_int_base, baseMVA, bus, gen, branch, N_BUS, N_GEN, N_BRANCH = load_case6ww_int()
     ppc_int_topo = apply_topology(ppc_int_base, topo_id)
     G, B, g_diag, b_diag, g_ndiag, b_ndiag = build_G_B_operators(ppc_int_topo)
 

@@ -9,7 +9,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import numpy as np  # noqa: E402
 from sample_config_model_01 import (  # noqa: E402
-    load_case39_int,
+    load_case6ww_int,
     get_res_bus_indices,
     apply_topology,
     SIGMA_REL_LOAD,
@@ -27,15 +27,15 @@ from helpers_ac_opf import solve_ac_opf  # noqa: E402
 
 
 def main():
-    print("=== Sample Generator Test ===\n")
+    print("=== Sample Generator Test (case6ww) ===\n")
 
     # Get CPU count for parallel solving
     n_cpus = multiprocessing.cpu_count()
     print(f"System CPUs: {n_cpus} (will use all for Gurobi)")
 
-    # Load case39
-    ppc_int, baseMVA, bus, gen, branch, N_BUS, N_GEN, N_BRANCH = load_case39_int()
-    print(f"Loaded case39: {N_BUS} buses, {N_GEN} gens, {N_BRANCH} branches")
+    # Load case6ww
+    ppc_int, baseMVA, bus, gen, branch, N_BUS, N_GEN, N_BRANCH = load_case6ww_int()
+    print(f"Loaded case6ww: {N_BUS} buses, {N_GEN} gens, {N_BRANCH} branches")
 
     # Get RES bus indices
     wind_idx, pv_idx = get_res_bus_indices(ppc_int)
@@ -50,11 +50,11 @@ def main():
         f"\nBase total load: PD={PD_base.sum():.2f} p.u., QD={QD_base.sum():.2f} p.u."
     )
 
-    # Create generator with 50.9% RES penetration and allow negative PD
+    # Create generator with 30% RES penetration (lower for smaller system) and allow negative PD
     gen_obj = SampleGeneratorModel01(
         PD_base=PD_base,
         QD_base=QD_base,
-        penetration_target=0.509,
+        penetration_target=0.30,
         res_bus_idx_wind=wind_idx,
         res_bus_idx_pv=pv_idx,
         rng_seed=42,
@@ -67,13 +67,13 @@ def main():
         alpha_pv=ALPHA_PV,
         beta_pv=BETA_PV,
         g_stc=G_STC,
-        allow_negative_pd=True,
+        allow_negative_pd=False,  # Disable negative PD for case6ww
     )
 
     print(f"\nGenerator initialized with:")
     print(f"  - {len(wind_idx)} wind buses")
     print(f"  - {len(pv_idx)} PV buses")
-    print(f"  - Target penetration: 50.9%")
+    print(f"  - Target penetration: 30%")
 
     # Generate 3 samples for topology 0 (base case)
     print("\n=== Generating 3 samples for topology 0 ===")
@@ -104,11 +104,8 @@ def main():
         print(f"  Total RES available (raw): {total_res_avail:.3f} p.u.")
         print(f"  Injected RES (scaled): {injected_res:.3f} p.u.")
         print(f"  Penetration (method 1): {penetration_injected*100:.1f}%")
-        print(f"  Wind contribution: {P_res[wind_idx].sum():.3f} p.u.")
-        print(f"  PV contribution: {P_res[pv_idx].sum():.3f} p.u.")
-        print(
-            f"  Negative PD buses: {n_neg} (min pd = {min_pd:.3f} p.u., sum negative = {neg_total:.3f} p.u.)"
-        )
+        print(f"  Wind contribution: {P_res[wind_idx[0]]:.3f} p.u.")
+        print(f"  PV contribution: {sum(P_res[idx] for idx in pv_idx):.3f} p.u.")
 
         samples_data.append(sample)
 

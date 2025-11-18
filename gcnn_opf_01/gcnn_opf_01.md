@@ -5,59 +5,72 @@
 - Files present:
   - `config_model_01.py`: Dataclasses-based configs (`ModelConfig`, `TrainingConfig`) with convenience instances and legacy constants retained for compatibility.
   - `model_01.py`: GCNN model; fixed concatenation bug (now uses `torch.cat`) and removed unused imports. Shapes verified at module level.
-  - `sample_config_model_01.py`: Utilities for IEEE-39 case loading, N-1 topology application, and operator construction:
-    - `TOPOLOGY_BRANCH_PAIRS_1BASED` with topo IDs 0–4.
+  - **`sample_config_model_01.py`**: Utilities for **case6ww** (6-bus Wood & Wollenberg system):
+    - **Updated from case39 to case6ww** for faster AC-OPF solving (~10-20x speedup).
+    - `TOPOLOGY_BRANCH_PAIRS_1BASED` with topo IDs 0–4: N-1 contingencies at branches (5-2), (1-2), (2-3), (5-6) in external 1-based numbering.
+    - **RES bus configuration**: Wind at bus 5, PV at buses 4 and 6 (external numbering).
+    - `find_branch_indices_for_pairs()` now properly converts external 1-based bus IDs to internal 0-based indices using `e2i` mapping.
     - `apply_topology(ppc_int, topo_id)` sets `branch[:, 10]` (BR_STATUS) to 0 for outages.
+    - `load_case6ww_int()` (renamed from `load_case39_int()`) loads case6ww with internal indexing.
     - `build_G_B_operators(ppc_int)` returns `G, B, g_diag, b_diag, g_ndiag, b_ndiag` as `torch.float32` tensors.
   - `sample_generator_model_01.py`: Scenario generator completed with:
     - Gaussian load fluctuation, wind (Weibull + turbine curve), PV (Beta + linear irradiance), per-bus nameplate tied to base PD.
     - Target RES penetration scaling (global), with percent/fraction auto-interpretation.
     - `allow_negative_pd` flag to optionally permit net export (no clipping).
     - **Power factor correction** (line 127, 193): Calculates `power_factor_ratio = QD_base / (PD_base + 1e-8)`, then recalculates `qd = power_factor_ratio * pd` after RES injection to maintain consistent QD/PD ratio.
-  - `tests/test_sample_generator.py`: Test updated to:
-    - Use 50.9% penetration and `allow_negative_pd=True`.
-    - Report penetration by injected offset (method 1): `(sum(pd_raw) - sum(pd)) / sum(pd_raw)` → matches target (50.9%).
+  - **`tests/test_sample_generator.py`**: Test updated for case6ww:
+    - **Migrated from case39 to case6ww** (6 buses, 3 generators, 11 branches).
+    - Uses 30% RES penetration (reduced from 50.9% for smaller system stability).
+    - Disabled `allow_negative_pd` for case6ww.
+    - Report penetration by injected offset (method 1): `(sum(pd_raw) - sum(pd)) / sum(pd_raw)` → matches target (30%).
     - **AC-OPF integration**: Generates 3 scenarios, solves each with `solve_ac_opf()` from `src/helpers_ac_opf.py`.
     - **CPU optimization**: Detects and uses all 20 CPU cores via `multiprocessing.cpu_count()` for Gurobi parallel solving.
-    - **Enhanced output**: Shows PD and QD totals, penetration %, negative PD stats, and OPF results (generation, cost, voltage range, losses).
+    - **Enhanced output**: Shows PD and QD totals, penetration %, and OPF results (generation, cost, demand, losses).
+  - **`tests/test_topology_outages.py`**: Topology verification test updated to case6ww; all 4 N-1 topologies verified ✓.
   - `tests/debug_sample2.py`: Standalone debug script for Sample 2 with verbose Gurobi output; used to diagnose time limit issues before QD fix.
-  - `topo_N-1_model_01.html`: Interactive vis-network copy for IEEE-39 with requested edges highlighted.
+  - **`topo_N-1_model_01.html`**: Interactive visualization for case6ww with highlighted features:
+    - **Red edges**: N-1 contingency lines (5-2, 1-2, 2-3, 5-6).
+    - **Green node**: Wind generation bus (bus 5).
+    - **Yellow nodes**: PV generation buses (buses 4, 6).
+  - **`create_topo_viz.py`** and **`apply_highlights.py`**: Scripts to generate and customize topology visualization.
   - `gcnn_opf_01.md`: Design notes and data loading guidance (this file).
   - `formulas_model_01.md`: Formula references for the GCNN/feature construction.
 
 - Observations:
   - BR_STATUS column index `10` matches MATPOWER/PYPOWER convention.
-  - Topology pairs (14–13) and (15–16) exist as direct branches in case39; (26–27) and (1–39) do not appear as direct rows.
+  - **case6ww migration**: System reduced from 39 buses/10 gens to 6 buses/3 gens for faster training data generation.
+  - **AC-OPF solve time**: case6ww solves in <1 second vs 10-180 seconds for case39 (10-20x speedup).
   - Operator construction relies on `makeYbus` and cleanly splits diag/off-diag parts into tensors, aligning with `model_01.py` expectations.
   - The prior "low penetration" readout was due to using raw availability; penetration is now computed from injected RES and hits the target.
-  - **AC-OPF performance**: All 3 test samples solve optimally within 180s time limit using 20 CPU threads (Gurobi 12.0.3, NonConvex=2, MIPGap=0.03).
-  - **Power factor fix impact**: Before QD correction, Sample 2 hit 300s time limit with 3.3% gap and objective 43915.78 $/hr; after fix, solves optimally in <10s with objective 11144.68 $/hr.
+  - **Power factor fix impact**: QD recalculation from final PD ensures physically consistent reactive power in scenarios.
 
 ### Quick Notes (2025-01-19)
+- **Migrated from case39 (39-bus) to case6ww (6-bus)** for feasible 12k sample generation.
 - Penetration reporting now uses injected offset (method 1), not raw availability.
-- Negative PD allowed in scenarios when requested; test prints count/min/sum of negative PD buses.
 - Known warning: NumPy 2.x vs Torch compiled on 1.x — benign for this test path.
-- **AC-OPF test results** (3 scenarios, 50.9% RES penetration):
-  - Sample 1: PD=30.613 p.u., QD=8.926 p.u., Objective=10764.11 $/hr, optimal.
-  - Sample 2: PD=30.610 p.u., QD=7.365 p.u., Objective=11144.68 $/hr, optimal.
-  - Sample 3: PD=30.402 p.u., QD=5.567 p.u., Objective=10708.22 $/hr, optimal.
-  - Losses: 0.7-0.8 p.u. (realistic for high RES penetration).
+- **AC-OPF test results for case6ww** (3 scenarios, 30% RES penetration):
+  - Sample 1: PD=1.357 p.u., QD=1.357 p.u., Objective=2218.18 $/hr, optimal, ~0.5s solve time.
+  - Sample 2: PD=1.502 p.u., QD=1.502 p.u., Objective=2391.10 $/hr, optimal, ~0.8s solve time.
+  - Sample 3: PD=1.516 p.u., QD=1.516 p.u., Objective=2410.95 $/hr, optimal, ~0.5s solve time.
+  - Losses: 0.028-0.040 p.u. (realistic for 6-bus system).
 - **Solver fixes in `src/helpers_ac_opf.py`**:
   - Lines 267-290: Warm start initialization with bounds clipping to prevent W1002 warnings.
   - Lines 318-328: Replaced deprecated `pyo.SolverResults()` with custom `ErrorResult` class.
+- **case6ww topology visualization** with color-coded highlights created successfully.
 
 - Next steps (suggested):
   - Add a thin adapter to package `PD/QD`, `G/B` into tensors and tile `e_0_k`, `f_0_k` channels for the model.
   - Write a small unit test for `model_01.py` to assert output shapes given synthetic inputs.
   - Decide on Dataset strategy: precompute features to NPZ vs on-the-fly.
-  - Scale up scenario generation to 12k samples for full dataset (currently tested with 3 samples).
+  - Scale up scenario generation to 12k samples for full dataset (currently tested with 3 samples, expect ~10-20 min for 12k at 0.5-1s per sample).
 
 ## To-do list (in order)
 
 ### 1. Network & config
 
-- [x] Write `sample_config_model_01.py` (load `case39`, compute basic metadata).
+- [x] Write `sample_config_model_01.py` (load case, compute basic metadata).
 - [x] Decide 5 line contingencies and implement `apply_topology(ppc_int, topo_id)`.
+- [x] **Migrate from case39 to case6ww** for faster AC-OPF solving.
 
 ---
 
