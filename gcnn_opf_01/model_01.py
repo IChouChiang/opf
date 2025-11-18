@@ -36,22 +36,8 @@ class GraphConv(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        g_ndiag: torch.Tensor,
-        b_ndiag: torch.Tensor,
-        g_diag: torch.Tensor,
-        b_diag: torch.Tensor,
     ):
         super().__init__()
-
-        # Store physics operators as non-trainable buffers
-        # z(G_ndiag), z(B_ndiag): off-diagonal propagation operators
-        self.register_buffer("g_ndiag", g_ndiag)  # [N, N]
-        self.register_buffer("b_ndiag", b_ndiag)  # [N, N]
-
-        # z(G_diag), z(B_diag): diagonal terms (stored as 1D vectors)
-        self.register_buffer("g_diag", g_diag)  # [N]
-        self.register_buffer("b_diag", b_diag)  # [N]
-
         # Learnable parameters W1, W2, B1, B2 in Eq. (18)
         # We treat e^l, f^l as [N, Cin], so W1,W2: Cin -> Cout
         self.W1 = nn.Linear(in_channels, out_channels, bias=False)
@@ -71,6 +57,10 @@ class GraphConv(nn.Module):
         f_0_k: torch.Tensor,
         pd: torch.Tensor,
         qd: torch.Tensor,
+        g_ndiag: torch.Tensor,
+        b_ndiag: torch.Tensor,
+        g_diag: torch.Tensor,
+        b_diag: torch.Tensor,
     ):
         """
         Implements:
@@ -98,12 +88,12 @@ class GraphConv(nn.Module):
         #   e, f:             [N, Cin]
         # Result α: [N, Cin]
         # ---------------------------------------------------------------------
-        alpha = self.g_ndiag @ e - self.b_ndiag @ f
+        alpha = g_ndiag @ e - b_ndiag @ f
 
         # ---------------------------------------------------------------------
         # Eq. (20): β = z(G_ndiag) f^l + z(B_ndiag) e^l
         # ---------------------------------------------------------------------
-        beta = self.g_ndiag @ f + self.b_ndiag @ e
+        beta = g_ndiag @ f + b_ndiag @ e
 
         # ---------------------------------------------------------------------
         # Common term s = e^l ⊙ e^l + f^l ⊙ f^l  (element-wise)
@@ -112,8 +102,8 @@ class GraphConv(nn.Module):
         s = e * e + f * f
 
         # Prepare diagonal operators as [N, 1] to broadcast over channels
-        g_diag_col = self.g_diag.view(N, 1)  # [N, 1]
-        b_diag_col = self.b_diag.view(N, 1)  # [N, 1]
+        g_diag_col = g_diag.view(N, 1)  # [N, 1]
+        b_diag_col = b_diag.view(N, 1)  # [N, 1]
 
         # ---------------------------------------------------------------------
         # Eq. (21): δ = −P_D − (e^l⊙e^l + f^l⊙f^l) z(G_diag)
@@ -171,19 +161,13 @@ from config_model_01 import N_BUS, N_GEN, NEURONS_FC, CHANNELS_GC_IN, CHANNELS_G
 
 
 class GCNN_OPF_01(nn.Module):
-    def __init__(self, g_ndiag, b_ndiag, g_diag, b_diag):
+    def __init__(self):
         super().__init__()
 
         # GraphConv implements Eq. (16)–(22) + tanh in Eq. (7)/(18)
-        self.gc1 = GraphConv(
-            CHANNELS_GC_IN, CHANNELS_GC_OUT, g_ndiag, b_ndiag, g_diag, b_diag
-        )
-        self.gc2 = GraphConv(
-            CHANNELS_GC_OUT, CHANNELS_GC_OUT, g_ndiag, b_ndiag, g_diag, b_diag
-        )
-        self.gc3 = GraphConv(
-            CHANNELS_GC_OUT, CHANNELS_GC_OUT, g_ndiag, b_ndiag, g_diag, b_diag
-        )
+        self.gc1 = GraphConv(CHANNELS_GC_IN, CHANNELS_GC_OUT)
+        self.gc2 = GraphConv(CHANNELS_GC_OUT, CHANNELS_GC_OUT)
+        self.gc3 = GraphConv(CHANNELS_GC_OUT, CHANNELS_GC_OUT)
 
         # We will flatten both e and f at the end → 2 * N_BUS * CHANNELS_GC_OUT
         flat_dim = N_BUS * 2 * CHANNELS_GC_OUT
@@ -195,7 +179,17 @@ class GCNN_OPF_01(nn.Module):
         self.fc2 = nn.Linear(NEURONS_FC, NEURONS_FC)
         self.fc3 = nn.Linear(NEURONS_FC, N_GEN * 2)  # Predict PG and VG
 
-    def forward(self, e_0_k, f_0_k, pd, qd):
+    def forward(
+        self,
+        e_0_k,
+        f_0_k,
+        pd,
+        qd,
+        g_ndiag,
+        b_ndiag,
+        g_diag,
+        b_diag,
+    ):
         """
         e_0_k, f_0_k : [N_BUS, CHANNELS_GC_IN]   # constructed features e^0, f^0
         pd, qd       : [N_BUS] or [N_BUS, 1]     # P_D, Q_D
@@ -206,9 +200,9 @@ class GCNN_OPF_01(nn.Module):
 
         # ----- Graph convolution block: 3 layers -----
         # Each GraphConv already applies tanh, following Eq. (7)/(18)
-        e, f = self.gc1(e_0_k, f_0_k, pd, qd)
-        e, f = self.gc2(e, f, pd, qd)
-        e, f = self.gc3(e, f, pd, qd)
+        e, f = self.gc1(e_0_k, f_0_k, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
+        e, f = self.gc2(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
+        e, f = self.gc3(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
 
         # Combine e, f as the node feature matrix for the FC block
         # Shape: [N_BUS, 2 * CHANNELS_GC_OUT]
