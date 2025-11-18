@@ -64,6 +64,30 @@
   - Decide on Dataset strategy: precompute features to NPZ vs on-the-fly.
   - Scale up scenario generation to 12k samples for full dataset (currently tested with 3 samples, expect ~10-20 min for 12k at 0.5-1s per sample).
 
+## Sample Config
+
+`sample_config_model_01.py` (case6ww):
+- System: 6 buses / 3 gens / 11 branches / baseMVA=100 (≤1s AC‑OPF).
+- Topologies (external buses): 0=[] 1=(5,2) 2=(1,2) 3=(2,3) 4=(5,6).
+- RES buses ext→int: Wind [5]→[4]; PV [4,6]→[3,5].
+- Load fluctuation σ=0.10 (relative).
+- Wind Weibull: λ=5.089, k=2.016; speeds: cut‑in=4, rated=12, cut‑out=25 (m/s).
+- PV Beta: α=2.06, β=2.5; G_STC=1000 W/m².
+- Branch status column: 10 (BR_STATUS).
+- Functions: load_case6ww_int(), get_res_bus_indices(), find_branch_indices_for_pairs(), apply_topology(), build_G_B_operators(), get_operators_for_topology().
+- All powers in p.u. (MW/MVAr ÷ baseMVA); cost scaling handled elsewhere.
+
+## Model Config
+
+`model_01.py` (GCNN predictor):
+- Inputs: e_0_k,f_0_k [N_BUS,Cin]; pd,qd [N_BUS]; g_diag,b_diag [N_BUS]; g_ndiag,b_ndiag [N_BUS,N_BUS].
+- Output: [N_GEN,2] (currently 3×2 for case6ww; interpret as PG,QG or PG,Vm pending final mapping).
+- Implemented: GraphConv layers (concat fix), dense operator message passing.
+- Pending: feature iteration (III.C eqs 8–25); z‑score normalization; physics losses L_PG, L_{Δ,P𝓧}.
+- Next tasks: (1) adapter tensor loader (2) generator mask (3) shape unit test (4) construct_features loop (5) configurable depth/activation (6) PG bounds clamp.
+- Risks: overfit on 6‑bus; scaling to 39‑bus needs sparsity; enforce index alignment assertions.
+
+
 ## To-do list (in order)
 
 ### 1. Network & config
@@ -77,8 +101,7 @@
 ### 2. Scenario Generator
 
 - [x] Implement scenario generator with fluctuation, RES sampling, target scaling, RES-as-negative-load, and `allow_negative_pd` flag.
-- [x] Debug on multiple samples; penetration (method 1) matches target 50.9%.
-- [ ] Optional: expose `P_res_injected` per bus in sample dict (currently derivable via `pd_raw - pd`).
+- [x] Debug on 3 samples (case6ww): penetration (method 1) stable at ~30%, negative PD disabled, power factor correction applied.
 
 ---
 
