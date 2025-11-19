@@ -44,7 +44,7 @@
   - The prior "low penetration" readout was due to using raw availability; penetration is now computed from injected RES and hits the target.
   - **Power factor fix impact**: QD recalculation from final PD ensures physically consistent reactive power in scenarios.
 
-### Quick Notes (2025-01-19)
+### Quick Notes (2025-11-19)
 - **Migrated from case39 (39-bus) to case6ww (6-bus)** for feasible 12k sample generation.
 - Penetration reporting now uses injected offset (method 1), not raw availability.
 - Known warning: NumPy 2.x vs Torch compiled on 1.x — benign for this test path.
@@ -57,12 +57,19 @@
   - Lines 267-290: Warm start initialization with bounds clipping to prevent W1002 warnings.
   - Lines 318-328: Replaced deprecated `pyo.SolverResults()` with custom `ErrorResult` class.
 - **case6ww topology visualization** with color-coded highlights created successfully.
+- **Dataset generation** (2025-11-19):
+  - Script `generate_dataset.py` running with 20 CPU threads (full CPU power).
+  - Target: 10,000 training + 2,000 test samples.
+  - Progress: ~1% complete, ~5-6 samples/sec, ~3.5% infeasibility rate (skip-retry enabled).
+  - Expected completion: ~30-35 minutes total runtime.
+  - Output: `samples_train.npz`, `samples_test.npz`, `topology_operators.npz`, `norm_stats.npz`.
 
 - Next steps (suggested):
-  - Add a thin adapter to package `PD/QD`, `G/B` into tensors and tile `e_0_k`, `f_0_k` channels for the model.
+  - Verify generated dataset integrity (shapes, statistics, normalization).
+  - Add a thin adapter to package tensors for model input.
   - Write a small unit test for `model_01.py` to assert output shapes given synthetic inputs.
-  - Decide on Dataset strategy: precompute features to NPZ vs on-the-fly.
-  - Scale up scenario generation to 12k samples for full dataset (currently tested with 3 samples, expect ~10-20 min for 12k at 0.5-1s per sample).
+  - Implement PyTorch Dataset class to load NPZ files.
+  - Begin training loop implementation.
 
 ## Sample Config
 
@@ -111,8 +118,10 @@
 
 - [x] Implement `solve_ac_opf(ppc_base, pd, qd, topo_id)` (Pyomo+Gurobi) — using shared `src/helpers_ac_opf.py`.
 - [x] Test on a few manually constructed scenarios — tested with 3 RES scenarios, all solve optimally.
-- [ ] Loop over 12k scenarios and fill arrays for `PD_all`, `QD_all`, `topo_all`, `PG_all`, `VG_all`.
-- [ ] Save to `opf6ww_dataset_v1.npz`.
+- [x] **Dataset generation script** (`generate_dataset.py`) implemented with full pipeline.
+- [x] **CPU optimization**: Configured Gurobi to use all 20 CPU threads for parallel solving.
+- [ ] Complete 12k sample generation (10k train + 2k test) — **IN PROGRESS** (2025-11-19).
+- [ ] Verify dataset integrity and statistics after generation completes.
 
 ---
 

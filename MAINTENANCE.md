@@ -1,5 +1,58 @@
 # Maintenance Log
 
+## 2025-11-19: Dataset Generation Pipeline (12k Samples)
+
+**Achievement:** Implemented full dataset generation pipeline for gcnn_opf_01 with CPU optimization.
+
+**Implementation:**
+1. **Dataset Generation Script** (`gcnn_opf_01/generate_dataset.py`):
+   - Precomputes topology operators for all 5 topologies (base + 4 N-1 contingencies)
+   - Generates 10,000 training + 2,000 test samples
+   - Pipeline: topology sampling → RES scenario → feature construction → AC-OPF → label extraction
+   - Skip-retry logic ensures exactly 12k feasible solutions (ignores infeasible AC-OPF results)
+   - Checkpoints every 500 samples for progress tracking
+   - Computes z-score normalization statistics from training set only
+   - Output: 4 NPZ files (`samples_train.npz`, `samples_test.npz`, `topology_operators.npz`, `norm_stats.npz`)
+
+2. **CPU Optimization**:
+   - Configured Gurobi to use all 20 CPU threads (`SOLVER_THREADS = multiprocessing.cpu_count()`)
+   - Previous: half CPU cores → Current: full CPU power
+   - Speed: ~5-6 samples/second with 20 threads
+   - Estimated runtime: ~30-35 minutes for 12k samples
+
+3. **Dataset Structure**:
+   - Features: `e_0_k`, `f_0_k` [N_BUS=6, k=8] from model-informed feature construction
+   - Inputs: `pd`, `qd` [N_BUS=6] demand scenarios (30% RES penetration)
+   - Labels: `pg_labels` [N_GEN=3], `vg_labels` [N_GEN=3] from AC-OPF solutions
+   - Topology: `topo_id` ∈ {0,1,2,3,4} sampled uniformly
+   - Normalization: z-score statistics for pd, qd, pg, vg
+
+**Technical Notes:**
+- Infeasibility rate: ~3-4% (expected for AC-OPF with N-1 contingencies)
+- NumPy 2.x compatibility: Using `.detach().cpu().tolist()` → `np.array()` workaround
+- Device-aware feature construction: GPU for k-iteration, CPU for AC-OPF solving
+- Power factor preservation: QD maintains consistent ratio with PD after RES injection
+- Python executable path: `E:\DevTools\anaconda3\envs\opf311\python.exe`
+
+**Status (2025-11-19 16:36):**
+- Generation started with 20 threads
+- Progress: ~1% complete (118/10000 training samples)
+- Infeasible samples skipped and retried automatically
+- Expected completion: ~17:10 (35 minutes from start)
+
+**Files Modified:**
+- `gcnn_opf_01/generate_dataset.py`: Full pipeline implementation
+- `gcnn_opf_01/gcnn_opf_01.md`: Updated to-do list and status
+- `README.md`: Updated GCNN status to show in-progress dataset generation
+
+**Next Steps:**
+- Monitor generation completion
+- Verify dataset integrity (shapes, normalization statistics)
+- Implement PyTorch Dataset loader
+- Begin training loop with supervised + physics-informed loss
+
+---
+
 ## 2025-11-19: GCNN Feature Construction & Physics Loss Implementation
 
 **Achievement:** Completed model-informed feature construction (Section III-C) and physics-informed loss functions for gcnn_opf_01 subproject.

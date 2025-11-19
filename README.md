@@ -161,7 +161,7 @@ python tests/test_topology_outages.py      # ✓ N-1 contingencies verified
 - ✅ Physics-informed loss functions
 - ✅ Scenario generator (Gaussian load + Weibull wind + Beta PV)
 - ✅ AC-OPF integration (using `src/helpers_ac_opf.py`)
-- ⏳ Dataset generation (12k samples planned)
+- 🔄 Dataset generation (12k samples in progress, 2025-11-19)
 - ⏳ Training pipeline
 
 ---

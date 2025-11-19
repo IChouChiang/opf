@@ -51,6 +51,7 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 
 ### Environment Setup
 - **Conda environment:** `opf311` (shared across devices)
+- **Python executable:** `E:\DevTools\anaconda3\envs\opf311\python.exe` (Windows/Alyce)
 - Recreate via: `conda env create -f envs/environment.yml`
 - **Key packages:** pyomo, pypower, torch, gurobipy, numpy, matplotlib
 
@@ -162,11 +163,19 @@ python test_sample_generator.py      # 3 RES scenarios + AC-OPF
 python test_topology_outages.py      # N-1 contingency verification
 ```
 
+**Dataset generation (12k samples):**
+```bash
+cd gcnn_opf_01
+python generate_dataset.py  # Generates samples_train.npz, samples_test.npz, etc.
+# Or with full path: E:\DevTools\anaconda3\envs\opf311\python.exe generate_dataset.py
+```
+
 **Shared utilities in `gcnn_opf_01/`:**
 - `construct_features(...)`: Core k-iteration algorithm (Eqs. 16-25)
 - `construct_features_from_ppc(ppc_int, pd, qd, k)`: Wrapper with generator limits extraction
 - `extract_gen_limits(ppc_int)`: Extracts PMIN/PMAX/QMIN/QMAX from ppc_int['gen']
 - `build_G_B_operators(ppc_int)`: Constructs G, B, g_diag, b_diag, g_ndiag, b_ndiag tensors
+- `generate_dataset.py`: Full pipeline for 12k sample generation with AC-OPF labeling
 
 ### Type Checking with Pyright
 - Config: `pyrightconfig.json` at root

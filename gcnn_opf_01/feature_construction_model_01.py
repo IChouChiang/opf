@@ -74,9 +74,12 @@ def construct_features(
     if qd.dim() > 1:
         qd = qd.squeeze()
 
-    # --- 1) Initialize voltages: e⁰ = 1, f⁰ = 0 ---
-    e = torch.ones(N_BUS, dtype=torch.float32)
-    f = torch.zeros(N_BUS, dtype=torch.float32)
+    # Get device from input tensors
+    device = pd.device
+
+    # --- 1) Initialize voltages: e⁰ = 1, f⁰ = 0 on the same device ---
+    e = torch.ones(N_BUS, dtype=torch.float32, device=device)
+    f = torch.zeros(N_BUS, dtype=torch.float32, device=device)
 
     # Storage for features
     e_list = []
