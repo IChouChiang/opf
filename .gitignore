@@ -147,3 +147,11 @@ outputs/
 
 # Overnight/long-running test results
 overnight_results.txt
+
+# GCNN dataset files (large, generated)
+gcnn_opf_01/data/
+gcnn_opf_01/data_test/
+
+# Test/debug scripts (development only)
+gcnn_opf_01/test_generate_small.py
+tests/verify_opf_output.py
