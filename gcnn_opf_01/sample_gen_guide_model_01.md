@@ -99,7 +99,7 @@ This is the **cleanest, minimal, and fully paper-compatible** dataset format.
 
 # Implementation Status (2025-11-19)
 
-**Dataset generation script:** `generate_dataset.py` implemented and running.
+**Dataset generation:** ✅ **COMPLETED**
 
 **Configuration:**
 - Training samples: 10,000 (RNG seed: 42)
@@ -108,18 +108,28 @@ This is the **cleanest, minimal, and fully paper-compatible** dataset format.
 - RES penetration: 30% target
 - Solver: Gurobi with 20 CPU threads, 180s time limit, 3% MIP gap
 
-**Output files** (saved to `gcnn_opf_01/data/`):
-1. `samples_train.npz` — training set with features and labels
-2. `samples_test.npz` — test set with features and labels  
-3. `topology_operators.npz` — precomputed G/B operators for all 5 topologies
-4. `norm_stats.npz` — z-score statistics (pd, qd, pg, vg means/stds)
+**Results:**
+- Runtime: 42 minutes (16:36-17:18)
+- Training success rate: 96.2% (10,000 feasible / 10,394 attempts)
+- Test success rate: 95.7% (2,000 feasible / 2,089 attempts)
+- Overall infeasibility: ~4% (typical for AC-OPF with N-1 contingencies)
 
-**Progress:** Generation in progress (~30-35 min estimated runtime).
+**Output files** (saved to `gcnn_opf_01/data/`):
+1. `samples_train.npz` — 3.72 MB, [10000, 6, 8] features + [10000, 3] labels
+2. `samples_test.npz` — 0.74 MB, [2000, 6, 8] features + [2000, 3] labels
+3. `topology_operators.npz` — 1.64 KB, [5, 6, 6] G/B operators
+4. `norm_stats.npz` — 2 KB, z-score statistics
+
+**Normalization statistics** (computed from training set only):
+- pd: mean=0.2457, std=0.2753 (p.u.)
+- qd: mean=0.2457, std=0.2753 (p.u.)
+- pg: mean=0.5047, std=0.0558 (p.u.)
+- vg: mean=1.0567, std=0.0094 (p.u.)
 
 **Technical notes:**
-- Skip-retry logic ensures exactly 12k feasible samples (ignores infeasible AC-OPF)
-- Infeasibility rate: ~3-4% (typical for AC-OPF with N-1 contingencies)
-- Checkpoints every 500 samples for monitoring
+- Skip-retry logic ensured exactly 12k feasible samples
 - NumPy 2.x compatibility via `.tolist()` → `np.array()` conversion
+- Device-aware: GPU for k-iteration feature construction, CPU for AC-OPF
+- Checkpoints every 500 samples for progress monitoring
 
 

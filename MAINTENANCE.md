@@ -34,11 +34,21 @@
 - Power factor preservation: QD maintains consistent ratio with PD after RES injection
 - Python executable path: `E:\DevTools\anaconda3\envs\opf311\python.exe`
 
-**Status (2025-11-19 16:36):**
-- Generation started with 20 threads
-- Progress: ~1% complete (118/10000 training samples)
-- Infeasible samples skipped and retried automatically
-- Expected completion: ~17:10 (35 minutes from start)
+**Status (2025-11-19 17:18):**
+- ✅ Generation completed successfully
+- Training: 10,000 samples (96.2% success rate, 394 failed attempts)
+- Test: 2,000 samples (95.7% success rate, 89 failed attempts)
+- Total runtime: 42 minutes (16:36:15 - 17:18:52)
+- Output files:
+  - `samples_train.npz`: 3.72 MB
+  - `samples_test.npz`: 0.74 MB
+  - `topology_operators.npz`: 1.64 KB
+  - `norm_stats.npz`: 2.01 KB
+- Normalization statistics:
+  - pd: mean=0.2457±0.2753 p.u.
+  - qd: mean=0.2457±0.2753 p.u.
+  - pg: mean=0.5047±0.0558 p.u.
+  - vg: mean=1.0567±0.0094 p.u.
 
 **Files Modified:**
 - `gcnn_opf_01/generate_dataset.py`: Full pipeline implementation

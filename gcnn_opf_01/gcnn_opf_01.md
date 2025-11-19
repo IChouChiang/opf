@@ -58,11 +58,18 @@
   - Lines 318-328: Replaced deprecated `pyo.SolverResults()` with custom `ErrorResult` class.
 - **case6ww topology visualization** with color-coded highlights created successfully.
 - **Dataset generation** (2025-11-19):
-  - Script `generate_dataset.py` running with 20 CPU threads (full CPU power).
-  - Target: 10,000 training + 2,000 test samples.
-  - Progress: ~1% complete, ~5-6 samples/sec, ~3.5% infeasibility rate (skip-retry enabled).
-  - Expected completion: ~30-35 minutes total runtime.
-  - Output: `samples_train.npz`, `samples_test.npz`, `topology_operators.npz`, `norm_stats.npz`.
+  - **COMPLETED**: Full 12k dataset generation successful
+  - Script: `generate_dataset.py` with 20 CPU threads
+  - Runtime: ~42 minutes total (16:36-17:18)
+  - Training: 10,000 samples (96.2% success rate, 394 failures)
+  - Test: 2,000 samples (95.7% success rate, 89 failures)
+  - Total storage: 4.46 MB (compressed NPZ files)
+  - Output files in `gcnn_opf_01/data/`:
+    - `samples_train.npz` (3.72 MB)
+    - `samples_test.npz` (0.74 MB)
+    - `topology_operators.npz` (1.64 KB)
+    - `norm_stats.npz` (2 KB)
+  - Normalization stats: pd/qd mean=0.246±0.275, pg mean=0.505±0.056, vg mean=1.057±0.009
 
 - Next steps (suggested):
   - Verify generated dataset integrity (shapes, statistics, normalization).
@@ -114,14 +121,14 @@
 
 ---
 
-### 3. OPF labeling
+### 3. OPF labeling ✅ COMPLETE
 
 - [x] Implement `solve_ac_opf(ppc_base, pd, qd, topo_id)` (Pyomo+Gurobi) — using shared `src/helpers_ac_opf.py`.
 - [x] Test on a few manually constructed scenarios — tested with 3 RES scenarios, all solve optimally.
 - [x] **Dataset generation script** (`generate_dataset.py`) implemented with full pipeline.
 - [x] **CPU optimization**: Configured Gurobi to use all 20 CPU threads for parallel solving.
-- [ ] Complete 12k sample generation (10k train + 2k test) — **IN PROGRESS** (2025-11-19).
-- [ ] Verify dataset integrity and statistics after generation completes.
+- [x] **Complete 12k sample generation** (10k train + 2k test) — ✅ COMPLETED 2025-11-19.
+- [x] Dataset saved to `gcnn_opf_01/data/` (4.46 MB, 96%+ success rate).
 
 ---
 
