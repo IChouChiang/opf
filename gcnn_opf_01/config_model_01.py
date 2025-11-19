@@ -9,9 +9,11 @@ class ModelConfig:
 
     n_bus: int = 6  # number of buses in case6ww (Wood & Wollenberg 6-bus)
     n_gen: int = 3  # number of generators in case6ww
-    channels_gc_in: int = 8  # k=8 feature construction iterations (e^0...e^7, f^0...f^7)
+    channels_gc_in: int = (
+        8  # k=8 feature construction iterations (e^0...e^7, f^0...f^7)
+    )
     channels_gc_out: int = 8  # graph conv output channels
-    neurons_fc: int = 1000  # neurons per FC layer
+    neurons_fc: int = 128  # neurons per FC layer (reduced from 1000 for case6ww)
     n_gc_layers: int = 2  # number of graph conv layers (gc1, gc2)
     n_fc_layers: int = 1  # number of fully connected layers (fc1)
     activation_gs: str = "tanh"  # activation function for GC layers

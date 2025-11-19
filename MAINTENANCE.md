@@ -1,5 +1,77 @@
 # Maintenance Log
 
+## 2025-11-19: GCNN Training & Evaluation Completion
+
+**Achievement:** Completed full GCNN-OPF training pipeline with physics-informed loss and comprehensive evaluation.
+
+**Implementation:**
+1. **PyTorch Dataset & DataLoader** (`gcnn_opf_01/dataset.py`, `train.py`):
+   - OPF6WWDataset class loads NPZ files with z-score normalization
+   - Batch size=10 (paper recommendation)
+   - Automatic topology operator loading from precomputed file
+
+2. **Training Pipeline** (`gcnn_opf_01/train.py`):
+   - Adam optimizer (lr=1e-3, weight_decay=1e-5)
+   - Combined loss: L_supervised + κ·L_Δ,PG (κ=0.1)
+   - Early stopping with patience=10
+   - Model checkpointing (best and final)
+   - Training curves visualization
+
+3. **Training Results:**
+   - Total epochs: 23 (early stopping at epoch 20)
+   - Training time: ~4.8 minutes
+   - Best validation loss: 0.160208
+   - Final train loss: 0.176, validation loss: 0.171
+   - No overfitting observed
+
+4. **Evaluation** (`gcnn_opf_01/evaluate.py`):
+   - Comprehensive metrics: MSE, RMSE, MAE, MAPE, R²
+   - Per-generator analysis
+   - Test set: 2,000 samples
+
+5. **Test Set Performance:**
+   - **Generator Power (PG):**
+     - R² = 0.9765 (97.65% variance explained)
+     - RMSE = 0.153 p.u. ≈ 15.3 MW
+     - MAE = 0.073 p.u. ≈ 7.3 MW
+     - MAPE = 30.20%
+   - **Generator Voltage (VG):**
+     - R² = 0.9999 (99.99% variance explained)
+     - RMSE = 0.0077 p.u. ≈ 0.77%
+     - MAE = 0.0060 p.u. ≈ 0.60%
+     - MAPE = 0.68%
+
+6. **Per-Generator Analysis (PG):**
+   - Gen 0: MSE=0.0085 (best performance)
+   - Gen 1: MSE=0.0438 (systematic underestimation)
+   - Gen 2: MSE=0.0176 (good performance)
+
+7. **Week5 Documentation:**
+   - Comprehensive Chinese documentation in `Week5/Week5.md`
+   - Covers model architecture, sample generation, training results
+   - Includes all parameters, shapes, implementation files
+
+**Files Created:**
+- `gcnn_opf_01/dataset.py`: PyTorch Dataset implementation
+- `gcnn_opf_01/train.py`: Training loop with physics loss
+- `gcnn_opf_01/evaluate.py`: Comprehensive evaluation script
+- `gcnn_opf_01/results/`: Training artifacts (best_model.pth, training_log.csv, etc.)
+- `Week5/Week5.md`: Complete Chinese documentation
+
+**Technical Notes:**
+- Model converged well with physics-informed loss
+- Voltage prediction extremely accurate (R²>99.99%)
+- Power prediction shows good generalization (R²>97%)
+- Gen 1 shows systematic underestimation, likely due to operating near limits
+- Training speed: ~12.5 seconds per epoch on GPU
+
+**Next Steps:**
+- Consider expanding dataset with more high-load scenarios for Gen 1 improvement
+- Potential scaling to larger systems (case39, case118)
+- Hyperparameter tuning (κ, learning rate, FC neurons)
+
+---
+
 ## 2025-11-19: Dataset Generation Pipeline (12k Samples)
 
 **Achievement:** Implemented full dataset generation pipeline for gcnn_opf_01 with CPU optimization.

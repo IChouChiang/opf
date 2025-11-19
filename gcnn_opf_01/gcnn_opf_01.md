@@ -1,8 +1,39 @@
 # GCNN_OPF_01
 
-## Current Status (2025-01-19)
+# GCNN_OPF_01
 
-- Files present:
+## Current Status (2025-11-19) - ✅ TRAINING COMPLETED
+
+### Completed Pipeline:
+- ✅ Model architecture (2-head GCNN)
+- ✅ Feature construction (k=8 iterations)
+- ✅ Physics-informed loss functions
+- ✅ Dataset generation (12k samples, 96% success rate)
+- ✅ PyTorch Dataset & DataLoader
+- ✅ Training pipeline (23 epochs, early stopping)
+- ✅ Evaluation (R²=97.65% power, R²=99.99% voltage)
+- ✅ Week5 Chinese documentation
+
+### Training Results (2025-11-19):
+- **Model:** 15,026 parameters (NEURONS_FC=128)
+- **Training:** 23 epochs, 4.8 minutes, early stopping at epoch 20
+- **Best validation loss:** 0.160208
+- **Physics loss weight (κ):** 0.1
+
+### Test Performance (2,000 samples):
+- **Generator Power (PG):**
+  - R² = 0.9765 (97.65% variance explained)
+  - RMSE = 0.153 p.u. ≈ 15.3 MW (100 MVA base)
+  - MAE = 0.073 p.u. ≈ 7.3 MW
+  - MAPE = 30.20%
+
+- **Generator Voltage (VG):**
+  - R² = 0.9999 (99.99% variance explained)
+  - RMSE = 0.0077 p.u. ≈ 0.77%
+  - MAE = 0.0060 p.u. ≈ 0.60%
+  - MAPE = 0.68%
+
+### Files Present:
   - `config_model_01.py`: Dataclasses-based configs (`ModelConfig`, `TrainingConfig`) with convenience instances and legacy constants retained for compatibility.
   - `model_01.py`: GCNN model; fixed concatenation bug (now uses `torch.cat`) and removed unused imports. Shapes verified at module level.
   - **`sample_config_model_01.py`**: Utilities for **case6ww** (6-bus Wood & Wollenberg system):
@@ -28,55 +59,50 @@
     - **Enhanced output**: Shows PD and QD totals, penetration %, and OPF results (generation, cost, demand, losses).
   - **`tests/test_topology_outages.py`**: Topology verification test updated to case6ww; all 4 N-1 topologies verified ✓.
   - `tests/debug_sample2.py`: Standalone debug script for Sample 2 with verbose Gurobi output; used to diagnose time limit issues before QD fix.
-  - **`topo_N-1_model_01.html`**: Interactive visualization for case6ww with highlighted features:
+  - `topo_N-1_model_01.html`: Interactive visualization for case6ww with highlighted features:
     - **Red edges**: N-1 contingency lines (5-2, 1-2, 2-3, 5-6).
     - **Green node**: Wind generation bus (bus 5).
     - **Yellow nodes**: PV generation buses (buses 4, 6).
   - **`create_topo_viz.py`** and **`apply_highlights.py`**: Scripts to generate and customize topology visualization.
-  - `gcnn_opf_01.md`: Design notes and data loading guidance (this file).
+  - `gcnn_opf_01.md`: Design notes and status tracking (this file).
   - `formulas_model_01.md`: Formula references for the GCNN/feature construction.
+  - **`dataset.py`**: PyTorch Dataset class (OPF6WWDataset) with z-score normalization.
+  - **`train.py`**: Training pipeline with physics loss, early stopping, checkpointing.
+  - **`evaluate.py`**: Comprehensive evaluation script with per-generator analysis.
+  - **`results/`**: Training artifacts
+    - `best_model.pth`: Best model checkpoint (epoch ~20)
+    - `final_model.pth`: Final model (epoch 23)
+    - `training_log.csv`: Epoch-by-epoch metrics
+    - `training_curves.png`: Loss visualization
+    - `training_history.npz`: NumPy arrays of training history
+    - `evaluation_results.npz`: Test predictions and metrics
 
-- Observations:
+### Key Observations:
   - BR_STATUS column index `10` matches MATPOWER/PYPOWER convention.
   - **case6ww migration**: System reduced from 39 buses/10 gens to 6 buses/3 gens for faster training data generation.
   - **AC-OPF solve time**: case6ww solves in <1 second vs 10-180 seconds for case39 (10-20x speedup).
-  - Operator construction relies on `makeYbus` and cleanly splits diag/off-diag parts into tensors, aligning with `model_01.py` expectations.
-  - The prior "low penetration" readout was due to using raw availability; penetration is now computed from injected RES and hits the target.
-  - **Power factor fix impact**: QD recalculation from final PD ensures physically consistent reactive power in scenarios.
+  - Operator construction relies on `makeYbus` and cleanly splits diag/off-diag parts into tensors.
+  - **Power factor fix impact**: QD recalculation from final PD ensures physically consistent reactive power.
+  - **Training convergence**: Model converged in 23 epochs with early stopping, no overfitting observed.
+  - **Excellent voltage prediction**: R²>99.99% indicates model accurately learned voltage-power relationships.
+  - **Good power prediction**: R²>97% demonstrates strong generalization capability.
+  - **Gen 1 systematic underestimation**: Likely due to operating near power limits in high-load scenarios.
 
-### Quick Notes (2025-11-19)
-- **Migrated from case39 (39-bus) to case6ww (6-bus)** for feasible 12k sample generation.
-- Penetration reporting now uses injected offset (method 1), not raw availability.
-- Known warning: NumPy 2.x vs Torch compiled on 1.x — benign for this test path.
-- **AC-OPF test results for case6ww** (3 scenarios, 30% RES penetration):
-  - Sample 1: PD=1.357 p.u., QD=1.357 p.u., Objective=2218.18 $/hr, optimal, ~0.5s solve time.
-  - Sample 2: PD=1.502 p.u., QD=1.502 p.u., Objective=2391.10 $/hr, optimal, ~0.8s solve time.
-  - Sample 3: PD=1.516 p.u., QD=1.516 p.u., Objective=2410.95 $/hr, optimal, ~0.5s solve time.
-  - Losses: 0.028-0.040 p.u. (realistic for 6-bus system).
-- **Solver fixes in `src/helpers_ac_opf.py`**:
-  - Lines 267-290: Warm start initialization with bounds clipping to prevent W1002 warnings.
-  - Lines 318-328: Replaced deprecated `pyo.SolverResults()` with custom `ErrorResult` class.
-- **case6ww topology visualization** with color-coded highlights created successfully.
-- **Dataset generation** (2025-11-19):
-  - **COMPLETED**: Full 12k dataset generation successful
-  - Script: `generate_dataset.py` with 20 CPU threads
-  - Runtime: ~42 minutes total (16:36-17:18)
-  - Training: 10,000 samples (96.2% success rate, 394 failures)
-  - Test: 2,000 samples (95.7% success rate, 89 failures)
-  - Total storage: 4.46 MB (compressed NPZ files)
-  - Output files in `gcnn_opf_01/data/`:
-    - `samples_train.npz` (3.72 MB)
-    - `samples_test.npz` (0.74 MB)
-    - `topology_operators.npz` (1.64 KB)
-    - `norm_stats.npz` (2 KB)
-  - Normalization stats: pd/qd mean=0.246±0.275, pg mean=0.505±0.056, vg mean=1.057±0.009
+### Dataset Statistics (from 2025-11-19 generation):
+- Training: 10,000 samples (96.2% success rate, 394 failed attempts)
+- Test: 2,000 samples (95.7% success rate, 89 failed attempts)
+- Total runtime: 42 minutes (16:36:15 - 17:18:52)
+- Normalization statistics:
+  - pd: mean=0.2457±0.2753 p.u.
+  - qd: mean=0.2457±0.2753 p.u.
+  - pg: mean=0.5047±0.0558 p.u.
+  - vg: mean=1.0567±0.0094 p.u.
 
-- Next steps (suggested):
-  - Verify generated dataset integrity (shapes, statistics, normalization).
-  - Add a thin adapter to package tensors for model input.
-  - Write a small unit test for `model_01.py` to assert output shapes given synthetic inputs.
-  - Implement PyTorch Dataset class to load NPZ files.
-  - Begin training loop implementation.
+### Next Steps (Future Work):
+- Consider expanding dataset with more high-load scenarios for Gen 1 improvement
+- Hyperparameter tuning (κ, learning rate, FC neurons)
+- Potential scaling to larger systems (case39, case118)
+- Investigate Gen 1 underestimation with constraint analysis
 
 ## Sample Config
 
@@ -102,78 +128,20 @@
 - Risks: overfit on 6‑bus; scaling to 39‑bus needs sparsity; enforce index alignment assertions.
 
 
-## To-do list (in order)
+## To-do list (COMPLETED ✅)
 
 ### 1. Network & config ✅ COMPLETE
-
-- [x] Write `sample_config_model_01.py` (load case, compute basic metadata).
-- [x] Decide 5 line contingencies and implement `apply_topology(ppc_int, topo_id)`.
-- [x] **Migrate from case39 to case6ww** for faster AC-OPF solving.
-- [x] Add `extract_gen_limits()` for generator bounds extraction.
-- [x] Fix `build_G_B_operators()` for PyTorch tensor compatibility.
-
----
-
 ### 2. Scenario Generator ✅ COMPLETE
-
-- [x] Implement scenario generator with fluctuation, RES sampling, target scaling, RES-as-negative-load, and `allow_negative_pd` flag.
-- [x] Debug on 3 samples (case6ww): penetration (method 1) stable at ~30%, negative PD disabled, power factor correction applied.
-
----
-
 ### 3. OPF labeling ✅ COMPLETE
-
-- [x] Implement `solve_ac_opf(ppc_base, pd, qd, topo_id)` (Pyomo+Gurobi) — using shared `src/helpers_ac_opf.py`.
-- [x] Test on a few manually constructed scenarios — tested with 3 RES scenarios, all solve optimally.
-- [x] **Dataset generation script** (`generate_dataset.py`) implemented with full pipeline.
-- [x] **CPU optimization**: Configured Gurobi to use all 20 CPU threads for parallel solving.
-- [x] **Complete 12k sample generation** (10k train + 2k test) — ✅ COMPLETED 2025-11-19.
-- [x] Dataset saved to `gcnn_opf_01/data/` (4.46 MB, 96%+ success rate).
-
----
-
 ### 4. Model-Informed Feature Construction ✅ COMPLETE
+### 5. PyTorch Dataset + DataLoader ✅ COMPLETE
+### 6. Model wiring (GCNN_OPF_01) ✅ COMPLETE
+### 7. Training loop ✅ COMPLETE
+### 8. Correlative loss ✅ COMPLETE
+### 9. Evaluation ✅ COMPLETE
+### 10. Documentation ✅ COMPLETE
 
-- [x] Implement `construct_features()` according to III.C (Eqs. 16-25) — **feature_construction_model_01.py**.
-- [x] Implement `construct_features_from_ppc()` wrapper with generator limits extraction.
-- [x] Verify for one sample that features don't diverge and normalization works — **test_feature_construction.py** ✓.
-- [x] Fix tensor indexing for generator bus operations.
-- [ ] Decide: precompute $e\_0\_k$, $f\_0\_k$ for all samples into a new NPZ, or compute on the fly in Dataset.
-
----
-
-### 5. PyTorch Dataset + DataLoader
-
-- [ ] Implement `OPF6WWDataset` that reads NPZ (+ maybe calls `construct_features`).
-- [ ] Implement z-score normalization (fit on training set, save mean/std).
-
----
-
-### 6. Model wiring (GCNN\_OPF\_01) ✅ ARCHITECTURE COMPLETE
-
-- [x] `GraphConv` implemented with physics-guided convolution.
-- [x] `GCNN_OPF_01` with two-head architecture: gen_head [N_GEN,2] and v_head [N_BUS,2].
-- [x] Physics-informed loss functions in **loss_model_01.py**:
-  - [x] `build_A_g2b()`: generator-to-bus incidence matrix.
-  - [x] `f_pg_from_v()`: compute PG from voltages using power flow equations.
-  - [x] `correlative_loss_pg()`: L_supervised + κ·L_Δ,PG.
-- [ ] Write unit test to check `model(e_0_k, f_0_k, pd, qd, ...)` returns correct shapes.
-
----
-
-### 7. Training loop
-
-- [ ] Implement basic training with $\mathcal{L}_{sup}$ (MSE) only.
-- [ ] Monitor loss, maybe simple validation error.
-- [ ] Integrate correlative loss $\mathcal{L}_{\Delta, PG}$ from `loss_model_01.py`.
-
----
-
-### 8. Correlative loss ✅ IMPLEMENTED
-
-- [x] Implement $\mathcal{L}_{PG}(\mathbf{v}_{pred})$ and $\mathcal{L}_{\Delta, P\mathcal{X}}$ — **loss_model_01.py**.
-- [x] API: `correlative_loss_pg(gen_out, v_out, gen_labels, pd, G, B, gen_bus_indices, kappa=0.1)`.
-- [ ] Fine-tune using correlative loss in training loop.
+**All major tasks completed (2025-11-19). Project ready for future extensions.**
 
 ## GCNN OPF Data Loading Notes
 

@@ -76,57 +76,103 @@ class GraphConv(nn.Module):
             - then Eq. (7)/(18): Y = f( φ(X,A) W + B )
 
         """
+        # Handle batched vs unbatched inputs
+        if e_0_k.dim() == 3:  # Batched: [B, N, Cin]
+            B, N, Cin = e_0_k.shape
+            batched = True
+        else:  # Unbatched: [N, Cin]
+            N, Cin = e_0_k.shape
+            batched = False
+            # Add batch dimension for uniform processing
+            e_0_k = e_0_k.unsqueeze(0)  # [1, N, Cin]
+            f_0_k = f_0_k.unsqueeze(0)
+            pd = pd.unsqueeze(0) if pd.dim() == 1 else pd
+            qd = qd.unsqueeze(0) if qd.dim() == 1 else qd
+            B = 1
 
-        e = e_0_k  # [N, Cin], represents e^l, Cin equals CHANNELS_GC_IN
-        f = f_0_k  # [N, Cin], represents f^l
+        e = e_0_k  # [B, N, Cin], represents e^l
+        f = f_0_k  # [B, N, Cin], represents f^l
 
-        # Ensure pd, qd are [N, 1] for broadcasting
-        if pd.dim() == 1:
-            pd = pd.view(-1, 1)  # reshapes from [N] to [N, 1]
-        if qd.dim() == 1:
-            qd = qd.view(-1, 1)
+        # Ensure pd, qd are [B, N, 1] for broadcasting
+        if pd.dim() == 2:
+            pd = pd.unsqueeze(-1)  # [B, N, 1]
+        if qd.dim() == 2:
+            qd = qd.unsqueeze(-1)
 
-        N, Cin = e.shape
+        # Handle batched vs unbatched inputs
+        if e_0_k.dim() == 3:  # Batched: [B, N, Cin]
+            B, N, Cin = e_0_k.shape
+            batched = True
+        else:  # Unbatched: [N, Cin]
+            N, Cin = e_0_k.shape
+            batched = False
+            # Add batch dimension for uniform processing
+            e_0_k = e_0_k.unsqueeze(0)  # [1, N, Cin]
+            f_0_k = f_0_k.unsqueeze(0)
+            pd = pd.unsqueeze(0) if pd.dim() == 1 else pd
+            qd = qd.unsqueeze(0) if qd.dim() == 1 else qd
+            B = 1
+
+        e = e_0_k  # [B, N, Cin]
+        f = f_0_k
+
+        # Ensure pd, qd are [B, N, 1] for broadcasting
+        if pd.dim() == 2:
+            pd = pd.unsqueeze(-1)  # [B, N, 1]
+        if qd.dim() == 2:
+            qd = qd.unsqueeze(-1)
 
         # ---------------------------------------------------------------------
         # Eq. (19): α = z(G_ndiag) e^l − z(B_ndiag) f^l
         #   g_ndiag, b_ndiag: [N, N]
-        #   e, f:             [N, Cin]
-        # Result α: [N, Cin]
+        #   e, f:             [B, N, Cin]
+        # Result α: [B, N, Cin]
+        # Use einsum for batched matrix multiplication
         # ---------------------------------------------------------------------
-        alpha = g_ndiag @ e - b_ndiag @ f
+        alpha = torch.einsum("nm,bmc->bnc", g_ndiag, e) - torch.einsum(
+            "nm,bmc->bnc", b_ndiag, f
+        )
 
         # ---------------------------------------------------------------------
         # Eq. (20): β = z(G_ndiag) f^l + z(B_ndiag) e^l
         # ---------------------------------------------------------------------
-        beta = g_ndiag @ f + b_ndiag @ e
+        beta = torch.einsum("nm,bmc->bnc", g_ndiag, f) + torch.einsum(
+            "nm,bmc->bnc", b_ndiag, e
+        )
 
         # ---------------------------------------------------------------------
         # Common term s = e^l ⊙ e^l + f^l ⊙ f^l  (element-wise)
-        #   s: [N, Cin]
+        #   s: [B, N, Cin]
         # ---------------------------------------------------------------------
         s = e * e + f * f
 
-        # Prepare diagonal operators as [N, 1] to broadcast over channels
-        g_diag_col = g_diag.view(N, 1)  # [N, 1]
-        b_diag_col = b_diag.view(N, 1)  # [N, 1]
+        # Prepare diagonal operators as [N, 1] to broadcast over channels and batch
+        if g_diag.dim() == 1:
+            g_diag_col = g_diag.view(N, 1)  # [N, 1]
+        else:
+            g_diag_col = g_diag.view(N, -1)[:, 0:1]  # Take first column if 2D
+
+        if b_diag.dim() == 1:
+            b_diag_col = b_diag.view(N, 1)  # [N, 1]
+        else:
+            b_diag_col = b_diag.view(N, -1)[:, 0:1]
 
         # ---------------------------------------------------------------------
         # Eq. (21): δ = −P_D − (e^l⊙e^l + f^l⊙f^l) z(G_diag)
-        #   pd: [N,1]; s: [N,Cin]; g_diag_col: [N,1]
-        #   → broadcast to [N,Cin]
+        #   pd: [B,N,1]; s: [B,N,Cin]; g_diag_col: [N,1]
+        #   → broadcast to [B,N,Cin]
         # ---------------------------------------------------------------------
-        delta = -pd - s * g_diag_col  # [N, Cin]
+        delta = -pd - s * g_diag_col.unsqueeze(0)  # [B, N, Cin]
 
         # ---------------------------------------------------------------------
         # Eq. (22): λ = −Q_D − (e^l⊙e^l + f^l⊙f^l) z(B_diag)
         # ---------------------------------------------------------------------
-        lamb = -qd - s * b_diag_col  # [N, Cin]
+        lamb = -qd - s * b_diag_col.unsqueeze(0)  # [B, N, Cin]
 
         # ---------------------------------------------------------------------
         # Denominator α_i^2 + β_i^2  (for each bus & channel) in Eqs. (16)(17)
         # ---------------------------------------------------------------------
-        denom = alpha * alpha + beta * beta  # [N, Cin]
+        denom = alpha * alpha + beta * beta  # [B, N, Cin]
         denom = denom + self.eps  # avoid division by zero
 
         # ---------------------------------------------------------------------
@@ -134,11 +180,11 @@ class GraphConv(nn.Module):
         #   e^{l+1}_i = (δ_i α_i − λ_i β_i) / (α_i^2 + β_i^2)
         #   f^{l+1}_i = (δ_i β_i + λ_i α_i) / (α_i^2 + β_i^2)
         # ---------------------------------------------------------------------
-        num_e = delta * alpha - lamb * beta  # [N, Cin]
-        num_f = delta * beta + lamb * alpha  # [N, Cin]
+        num_e = delta * alpha - lamb * beta  # [B, N, Cin]
+        num_f = delta * beta + lamb * alpha  # [B, N, Cin]
 
-        e_update = num_e / denom  # [N, Cin], this is φ_e(X,A)
-        f_update = num_f / denom  # [N, Cin], this is φ_f(X,A)
+        e_update = num_e / denom  # [B, N, Cin], this is φ_e(X,A)
+        f_update = num_f / denom  # [B, N, Cin], this is φ_f(X,A)
 
         # ---------------------------------------------------------------------
         # Eq. (7) / Eq. (18): Y = f( φ(X,A) W + B )
@@ -151,11 +197,16 @@ class GraphConv(nn.Module):
         #   e^{l+1} = tanh(h1)
         #   f^{l+1} = tanh(h2)
         # ---------------------------------------------------------------------
-        h1 = self.W1(e_update) + self.B1  # [N, Cout]
-        h2 = self.W2(f_update) + self.B2  # [N, Cout]
+        h1 = self.W1(e_update) + self.B1  # [B, N, Cout]
+        h2 = self.W2(f_update) + self.B2  # [B, N, Cout]
 
-        e_next = self.act(h1)  # [N, Cout], e^{l+1}
-        f_next = self.act(h2)  # [N, Cout], f^{l+1}
+        e_next = self.act(h1)  # [B, N, Cout], e^{l+1}
+        f_next = self.act(h2)  # [B, N, Cout], f^{l+1}
+
+        # Remove batch dimension if input was unbatched
+        if not batched:
+            e_next = e_next.squeeze(0)  # [N, Cout]
+            f_next = f_next.squeeze(0)
 
         return e_next, f_next
 
@@ -200,28 +251,50 @@ class GCNN_OPF_01(nn.Module):
     ):
         """
         Args:
-            e_0_k, f_0_k: [N_BUS, CHANNELS_GC_IN]
-            pd, qd     : [N_BUS] or [N_BUS, 1]
+            e_0_k, f_0_k: [N_BUS, CHANNELS_GC_IN] or [B, N_BUS, CHANNELS_GC_IN]
+            pd, qd      : [N_BUS] or [B, N_BUS]
+            g/b_ndiag   : [N_BUS, N_BUS]
+            g/b_diag    : [N_BUS] or [N_BUS, 1]
 
         Returns:
-            gen_out: [N_GEN, 2]  (PG, VG)
-            v_out  : [N_BUS, 2]  (e, f)
+            gen_out: [N_GEN, 2] or [B, N_GEN, 2]  (PG, VG)
+            v_out  : [N_BUS, 2] or [B, N_BUS, 2]  (e, f)
         """
+        # Determine if batched
+        batched = e_0_k.dim() == 3
+        if batched:
+            B = e_0_k.shape[0]
+        else:
+            # Add batch dimension for uniform processing
+            e_0_k = e_0_k.unsqueeze(0)
+            f_0_k = f_0_k.unsqueeze(0)
+            pd = pd.unsqueeze(0) if pd.dim() == 1 else pd
+            qd = qd.unsqueeze(0) if qd.dim() == 1 else qd
+            B = 1
 
-        # GraphConv block
-        e, f = self.gc1(e_0_k, f_0_k, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
+        # GraphConv block (handles batched inputs internally)
+        e, f = self.gc1(
+            e_0_k, f_0_k, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag
+        )  # [B, N_BUS, Cout]
         e, f = self.gc2(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
 
         # Node features → FC trunk
-        h = torch.cat([e, f], dim=1)  # [N_BUS, 2*Cout]
-        h_flat = h.view(-1)  # [N_BUS*2*Cout]
-        h_fc1 = self.act_fc(self.fc1(h_flat))  # [NEURONS_FC]
+        h = torch.cat([e, f], dim=2)  # [B, N_BUS, 2*Cout]
+        h_flat = h.view(B, -1)  # [B, N_BUS*2*Cout]
+
+        # FC layers (process each sample in batch)
+        h_fc1 = self.act_fc(self.fc1(h_flat))  # [B, NEURONS_FC]
 
         # Heads
-        gen_flat = self.fc_gen(h_fc1)  # [N_GEN*2]
-        v_flat = self.fc_v(h_fc1)  # [N_BUS*2]
+        gen_flat = self.fc_gen(h_fc1)  # [B, N_GEN*2]
+        v_flat = self.fc_v(h_fc1)  # [B, N_BUS*2]
 
-        gen_out = gen_flat.view(N_GEN, 2)
-        v_out = v_flat.view(N_BUS, 2)
+        gen_out = gen_flat.view(B, N_GEN, 2)  # [B, N_GEN, 2]
+        v_out = v_flat.view(B, N_BUS, 2)  # [B, N_BUS, 2]
+
+        # Remove batch dimension if input was unbatched
+        if not batched:
+            gen_out = gen_out.squeeze(0)  # [N_GEN, 2]
+            v_out = v_out.squeeze(0)  # [N_BUS, 2]
 
         return gen_out, v_out

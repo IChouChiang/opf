@@ -8,7 +8,8 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 
 **Key Technologies:** Pyomo, PYPOWER/MATPOWER, Gurobi, PyTorch, NumPy
 
-**Environment:** `opf311` (Anaconda)
+**Environment:** `opf311` (Anaconda)  
+**Current Phase:** Week 5 - GCNN Training & Documentation
 
 ---
 
@@ -17,33 +18,36 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 ```
 opf/
 ├─ Week2/              # DC-OPF: linear formulation, case9
-├─ Week3/              # ML prediction: DCOPF → MLP, case118
-│   ├─ samples/        # Training data (chunked .npz)
-│   └─ results/        # Trained models
+├─ Week3/              # ML prediction: DCOPF �?MLP, case118
+�?  ├─ samples/        # Training data (chunked .npz)
+�?  └─ results/        # Trained models
+├─ Week5/              # GCNN project documentation (Chinese)
+�?  └─ Week5.md        # Comprehensive documentation with results
 ├─ gcnn_opf_01/        # Physics-guided GCNN for OPF (case6ww)
-│   ├─ model_01.py                # 2-head GCNN architecture
-│   ├─ loss_model_01.py           # Physics-informed loss functions
-│   ├─ feature_construction_model_01.py  # Model-informed features (Sec III-C)
-│   ├─ sample_config_model_01.py  # case6ww config & operators
-│   ├─ sample_generator_model_01.py  # RES scenario generator
-│   ├─ config_model_01.py         # Dataclass configs
-│   └─ *.md                       # Design docs & formulas
+�?  ├─ data/           # 12k samples (10k train, 2k test)
+�?  ├─ model_01.py                # 2-head GCNN architecture
+�?  ├─ loss_model_01.py           # Physics-informed loss functions
+�?  ├─ feature_construction_model_01.py  # Model-informed features (Sec III-C)
+�?  ├─ sample_config_model_01.py  # case6ww config & operators
+�?  ├─ sample_generator_model_01.py  # RES scenario generator
+�?  ├─ config_model_01.py         # Dataclass configs
+�?  └─ *.md                       # Design docs & formulas
 ├─ src/                # Reusable modules
-│   ├─ ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
-│   ├─ helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
-│   ├─ topology_viz.py        # Static network visualization
-│   └─ interactive_viz.py     # Interactive visualization (PyVis)
+�?  ├─ ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
+�?  ├─ helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
+�?  ├─ topology_viz.py        # Static network visualization
+�?  └─ interactive_viz.py     # Interactive visualization (PyVis)
 ├─ tests/              # Test harnesses and baselines
-│   ├─ test_case39.py         # IEEE 39-bus AC-OPF
-│   ├─ test_case57.py         # IEEE 57-bus AC-OPF
-│   ├─ test_feature_construction.py  # Feature construction validation
-│   ├─ test_sample_generator.py     # Scenario generator + AC-OPF
-│   ├─ test_topology_outages.py     # N-1 contingency verification
-│   ├─ case39_baseline.py     # PYPOWER reference (39-bus)
-│   └─ case57_baseline.py     # PYPOWER reference (57-bus)
+�?  ├─ test_case39.py         # IEEE 39-bus AC-OPF
+�?  ├─ test_case57.py         # IEEE 57-bus AC-OPF
+�?  ├─ test_feature_construction.py  # Feature construction validation
+�?  ├─ test_sample_generator.py     # Scenario generator + AC-OPF
+�?  ├─ test_topology_outages.py     # N-1 contingency verification
+�?  ├─ case39_baseline.py     # PYPOWER reference (39-bus)
+�?  └─ case57_baseline.py     # PYPOWER reference (57-bus)
 ├─ outputs/            # Generated files (git-ignored)
 ├─ .github/
-│   └─ copilot-instructions.md
+�?  └─ copilot-instructions.md
 ├─ pyrightconfig.json
 └─ README.md
 ```
@@ -79,7 +83,7 @@ python case57_baseline.py
 - **Cartesian voltage formulation:** Variables `e[i]` (real) and `f[i]` (imag) instead of polar Vm/Va
 - **Fixed quadratic objective:** Minimize Σ(a·PG² + b·PG + c) with cost coefficients scaled for p.u. variables
 - **Nonlinear power balance:** Bilinear constraints using admittance matrix G, B from PYPOWER's `makeYbus`
-- **Voltage magnitude limits:** (Vmin)² ≤ e² + f² ≤ (Vmax)²
+- **Voltage magnitude limits:** (Vmin)² �?e² + f² �?(Vmax)²
 - **Gurobi NonConvex solver:** MIQCP with spatial branching, half CPU cores, 3-minute time limit, 3% MIP gap
 
 ### Shared helpers (src/helpers_ac_opf.py)
@@ -101,10 +105,10 @@ python case57_baseline.py
 
 ## 🧩 Dependencies
 
-- `pyomo` — optimization modeling
-- `pypower` — power flow cases and reference solver
-- `gurobipy` — nonconvex quadratic solver
-- `torch` — neural network training (Week 3)
+- `pyomo` �?optimization modeling
+- `pypower` �?power flow cases and reference solver
+- `gurobipy` �?nonconvex quadratic solver
+- `torch` �?neural network training (Week 3)
 - `numpy`, `matplotlib`
 
 See `.github/copilot-instructions.md` for detailed architecture patterns and workflow.
@@ -125,9 +129,9 @@ See `.github/copilot-instructions.md` for detailed architecture patterns and wor
 Physics-guided Graph Convolutional Neural Network for optimal power flow prediction on **case6ww** (6-bus Wood & Wollenberg system).
 
 ### Architecture
-- **Model:** 2×GraphConv → shared FC → two heads
-  - `gen_head`: [N_GEN=3, 2] → (PG, VG)
-  - `v_head`: [N_BUS=6, 2] → (e, f) for physics validation
+- **Model:** 2×GraphConv �?shared FC �?two heads
+  - `gen_head`: [N_GEN=3, 2] �?(PG, VG)
+  - `v_head`: [N_BUS=6, 2] �?(e, f) for physics validation
 - **Feature construction:** k=8 iterations of model-informed voltage estimation (Section III-C)
   - Iterative PG/QG computation with generator clamping (Eqs. 23-24)
   - Voltage updates via power flow equations (Eqs. 16-17, 19-22)
@@ -146,32 +150,39 @@ Physics-guided Graph Convolutional Neural Network for optimal power flow predict
 ### Testing
 ```bash
 # Feature construction test
-python tests/test_feature_construction.py  # ✓ Validated [6,8] features, normalized voltages
+python tests/test_feature_construction.py  # �?Validated [6,8] features, normalized voltages
 
 # Scenario generation + AC-OPF
-python tests/test_sample_generator.py      # ✓ 3 scenarios, 30% RES, all optimal
+python tests/test_sample_generator.py      # �?3 scenarios, 30% RES, all optimal
 
 # Topology verification
-python tests/test_topology_outages.py      # ✓ N-1 contingencies verified
+python tests/test_topology_outages.py      # �?N-1 contingencies verified
 ```
 
-### Status
-- ✅ Model architecture (2-head GCNN)
-- ✅ Feature construction (k=8 iterations)
-- ✅ Physics-informed loss functions
-- ✅ Scenario generator (Gaussian load + Weibull wind + Beta PV)
-- ✅ AC-OPF integration (using `src/helpers_ac_opf.py`)
-- ✅ Dataset generation (12k samples completed, 2025-11-19)
-- ⏳ Training pipeline
+### Status (Completed 2025-11-19)
+- �?Model architecture (2-head GCNN)
+- �?Feature construction (k=8 iterations)
+- �?Physics-informed loss functions
+- �?Scenario generator (Gaussian load + Weibull wind + Beta PV)
+- �?AC-OPF integration (using `src/helpers_ac_opf.py`)
+- �?Dataset generation (12k samples, 96% success rate)
+- �?Training pipeline (23 epochs, early stopping)
+- �?Model evaluation (R²=0.9765 for PG, R²=0.9999 for VG)
 
 ---
 
-## ✅ Completed Milestones
+## �?Completed Milestones
 
 - [x] Week 2: DC-OPF with linear constraints, PTDF analysis
-- [x] Week 3: ML-based OPF prediction (MLP: P_D → P_G), 10k samples
+- [x] Week 3: ML-based OPF prediction (MLP: P_D �?P_G), 10k samples
 - [x] Week 4: AC-OPF Cartesian formulation, Gurobi nonconvex solve, PYPOWER baseline validation
-- [x] GCNN: Model architecture, feature construction, physics loss (gcnn_opf_01/)
+- [x] Week 5: GCNN-OPF complete pipeline
+  - [x] Model architecture (2-head GCNN with physics-informed layers)
+  - [x] Feature construction (k=8 iterations)
+  - [x] Dataset generation (12k samples, 5 topologies, 50.7% RES penetration)
+  - [x] Training (23 epochs, physics-informed loss, early stopping)
+  - [x] Evaluation (R²=97.65% for power, R²=99.99% for voltage)
+  - [x] Chinese documentation (Week5/Week5.md)
 
 ---
 
@@ -183,166 +194,53 @@ python tests/test_topology_outages.py      # ✓ N-1 contingencies verified
 
 ------
 
-## 🧭 1. The baseline situation
+## 🚀 Week 5 Highlights (GCNN-OPF)
 
-**Devices:**
+### Training Results
+- **Model:** 15,026 parameters, NEURONS_FC=128
+- **Training:** 23 epochs, 4.8 minutes, early stopping at epoch 20
+- **Best validation loss:** 0.160208
+- **Physics loss weight (κ):** 0.1
 
-- 🖥️ *Alyce (Windows 11)* — main workstation, VS Code
-- 💻 *Chromebook (Crostini Linux)* — lightweight remote editing (vim / Jupyter)
+### Test Set Performance (2,000 samples)
+- **Generator Power (PG):**
+  - R² = 0.9765 (97.65% variance explained)
+  - RMSE = 0.153 p.u. �?15.3 MW
+  - MAE = 0.073 p.u. �?7.3 MW
+  - MAPE = 30.20%
 
-**Environment:**
- `opf311` (Anaconda) — shared libs for OPF, Pyomo, Gurobi, NumPy, PyTorch, etc.
+- **Generator Voltage (VG):**
+  - R² = 0.9999 (99.99% variance explained)
+  - RMSE = 0.0077 p.u. �?0.77%
+  - MAE = 0.0060 p.u. �?0.60%
+  - MAPE = 0.68%
 
-**Work pattern:**
- Weekly tasks from your tutor, sometimes connected, sometimes independent.
+### Dataset Details
+- **System:** case6ww (6 buses, 3 generators)
+- **Topologies:** 5 configurations (base + 4 N-1 contingencies)
+- **RES Integration:** Wind (Weibull) at bus 5, PV (Beta) at buses 4 & 6
+- **Target Penetration:** 50.7%
+- **Training samples:** 10,000 (96.2% success rate)
+- **Test samples:** 2,000 (95.7% success rate)
 
-------
+### Documentation
+- Full Chinese documentation available in `Week5/Week5.md`
+- Includes model architecture, sample generation, and training results
 
-## 🗂️ 2. Recommended project layout
+---
 
-Here’s a versioned, sync-friendly structure you can push to GitHub safely:
+## 📚 Additional Documentation
 
-```
-opf/
-│
-├─ envs/
-│   └─ environment.yml           ← conda env spec (recreate opf311)
-│
-├─ notebooks/
-│   ├─ week02/
-│   │   └─ week02.ipynb
-│   ├─ week03/
-│   │   └─ week03.ipynb
-│   ├─ shared/
-│   │   └─ experiments.ipynb     ← optional common scratchpad
-│
-├─ src/
-│   ├─ __init__.py
-│   ├─ dcopf_utils.py            ← reusable helper functions
-│   └─ ml_utils.py
-│
-├─ data/
-│   ├─ raw/                      ← never commit heavy data; use .gitignore
-│   └─ processed/
-│
-├─ models/                       ← trained NN checkpoints (usually git-ignored)
-│
-├─ .vscode/                      ← editor settings (OK to sync)
-├─ .gitignore
-├─ pyproject.toml or pyrightconfig.json
-├─ README.md                     ← short intro, env usage, workflow
-└─ requirements.txt or environment.yml
-```
+- **Week5/Week5.md** - Comprehensive Chinese documentation of GCNN-OPF project
+- **.github/copilot-instructions.md** - Development patterns and architecture guide
+- **MAINTENANCE.md** - Change log and implementation notes
+- **gcnn_opf_01/*.md** - Design documents, formulas, and guides
 
-🟢 **Good habits**
+---
 
-- Keep each week’s notebook in its own folder, versioned in git.
-- Put reusable code (plots, DCOPF solvers, data loaders) in `src/`.
-- Large data or model files → `.gitignore` (sync through Drive or Git LFS if needed).
-- Use `envs/environment.yml` to reproduce your conda setup on any machine.
+## 📝 References
 
-------
-
-## 🧩 3. About environment files
-
-### 🧱 Conda (`environment.yml`)
-
-Create it once on Alyce:
-
-```bash
-conda env export --name opf311 --no-builds > envs/environment.yml
-```
-
-Then on Chromebook:
-
-```bash
-conda env create -f envs/environment.yml
-```
-
-or update:
-
-```bash
-conda env update -f envs/environment.yml
-```
-
-This file **is safe and useful to commit** — it only lists package names & versions, no paths.
-
-### 🧾 Alternatively: pip
-
-If you sometimes use plain pip:
-
-```bash
-pip freeze > requirements.txt
-```
-
-But for multi-platform reproducibility, `environment.yml` is better.
-
-------
-
-## 🌐 4. GitHub synchronization strategy
-
-- **Push/pull workflow**
-
-  - On Alyce: regular development, commit & push
-  - On Chromebook: `git pull` to update
-
-- **.gitignore** example:
-
-  ```
-  # ignore large or transient data
-  data/raw/
-  models/
-  .ipynb_checkpoints/
-  __pycache__/
-  *.log
-  ```
-
-- Never push sensitive files: license keys, `.env` with API secrets, etc.
-
-- Optionally create branches for bigger tasks (e.g., `feature-week5-nn`).
-
-------
-
-## ⚙️ 5. VS Code + Vim consistency
-
-- Keep `.vscode/settings.json` synced — both machines can reuse lint/formatter rules.
-- On Chromebook, lightweight editing via `vim` or `jupyter` is fine; your structure doesn’t rely on VS Code features.
-
-------
-
-## ☁️ 6. Data & model handling
-
-GitHub has size limits (100 MB per file, 1 GB total recommended).
- So:
-
-- Save large simulation results or neural-network checkpoints to Google Drive or your router’s SSD (mounted via SMB/NFS).
-- Store only small metadata (e.g., `metadata.json`, logs) in GitHub.
-
-------
-
-## 🧠 7. Long-term best practices
-
-| Goal                 | Tool / Method                            |
-| -------------------- | ---------------------------------------- |
-| Reproducible env     | `environment.yml` pinned versions        |
-| Cross-device editing | GitHub + consistent folder names         |
-| Clean code reuse     | move helper functions → `src/`           |
-| Weekly progress      | separate `weekXX` folders + README notes |
-| Safe syncing         | .gitignore large files                   |
-| Documentation        | Markdown readme per week if necessary    |
-
-------
-
-## ✅ TL;DR — Best practice summary
-
-- Keep **one conda env (`opf311`)** shared across devices via `environment.yml`.
-- Organize weekly notebooks under `notebooks/weekXX/`.
-- Place reusable code in `src/`.
-- Commit `.vscode/`, `.gitignore`, `environment.yml`, and `.md` docs to GitHub.
-- Exclude large data/models.
-- Use Drive or LFS for big outputs.
-- Rebuild env on Chromebook via `conda env create -f envs/environment.yml`.
-
-------
-
-Would you like me to show you an **example `.gitignore` and `environment.yml`** tailored for your OPF + Pyomo + Gurobi + NN workflow? It’d fit perfectly with this structure.
+- MATPOWER: https://matpower.org
+- Pyomo: https://www.pyomo.org
+- Gurobi: https://www.gurobi.com/documentation/
+- Paper: "A Physics-Guided Graph Convolution Neural Network for Optimal Power Flow" (Gao et al.)
