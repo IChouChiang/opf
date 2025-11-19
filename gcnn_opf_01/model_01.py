@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
-from config_model_01 import N_BUS, N_GEN, NEURONS_FC, CHANNELS_GC_IN, CHANNELS_GC_OUT
+from config_model_01 import (
+    N_BUS,
+    N_GEN,
+    NEURONS_FC,
+    CHANNELS_GC_IN,
+    CHANNELS_GC_OUT,
+)
 
 
 class GraphConv(nn.Module):
@@ -154,65 +160,68 @@ class GraphConv(nn.Module):
         return e_next, f_next
 
 
-import torch.nn as nn
-from config_model_01 import N_BUS, N_GEN, NEURONS_FC, CHANNELS_GC_IN, CHANNELS_GC_OUT
-
-# CHANNELS_GC_IN / OUT = k in the paper (e.g. 8)
-
-
 class GCNN_OPF_01(nn.Module):
+    """
+    GCNN model for OPF (case6ww-optimized):
+      - 2 GraphConv layers (physics-guided, Eqs. 16–22 with tanh in Eq. 7/18)
+      - 1 shared FC trunk
+      - 2 heads:
+          * gen_head → [N_GEN, 2] (PG, VG)
+          * v_head   → [N_BUS, 2] (e, f) for physics/correlative losses
+    """
+
     def __init__(self):
         super().__init__()
 
-        # GraphConv implements Eq. (16)–(22) + tanh in Eq. (7)/(18)
+        # GraphConv stack (2 layers for case6ww per paper guidance)
         self.gc1 = GraphConv(CHANNELS_GC_IN, CHANNELS_GC_OUT)
         self.gc2 = GraphConv(CHANNELS_GC_OUT, CHANNELS_GC_OUT)
-        self.gc3 = GraphConv(CHANNELS_GC_OUT, CHANNELS_GC_OUT)
 
-        # We will flatten both e and f at the end → 2 * N_BUS * CHANNELS_GC_OUT
+        # Flatten concatenated e,f features
         flat_dim = N_BUS * 2 * CHANNELS_GC_OUT
 
-        # Activation for FC layers (GC layers already use tanh inside GraphConv)
         self.act_fc = nn.ReLU()
+        self.fc1 = nn.Linear(flat_dim, NEURONS_FC)  # shared trunk
 
-        self.fc1 = nn.Linear(flat_dim, NEURONS_FC)
-        self.fc2 = nn.Linear(NEURONS_FC, NEURONS_FC)
-        self.fc3 = nn.Linear(NEURONS_FC, N_GEN * 2)  # Predict PG and VG
+        # Heads
+        self.fc_gen = nn.Linear(NEURONS_FC, N_GEN * 2)  # (PG, VG)
+        self.fc_v = nn.Linear(NEURONS_FC, N_BUS * 2)    # (e, f)
 
     def forward(
         self,
-        e_0_k,
-        f_0_k,
-        pd,
-        qd,
-        g_ndiag,
-        b_ndiag,
-        g_diag,
-        b_diag,
+        e_0_k: torch.Tensor,
+        f_0_k: torch.Tensor,
+        pd: torch.Tensor,
+        qd: torch.Tensor,
+        g_ndiag: torch.Tensor,
+        b_ndiag: torch.Tensor,
+        g_diag: torch.Tensor,
+        b_diag: torch.Tensor,
     ):
         """
-        e_0_k, f_0_k : [N_BUS, CHANNELS_GC_IN]   # constructed features e^0, f^0
-        pd, qd       : [N_BUS] or [N_BUS, 1]     # P_D, Q_D
+        Args:
+            e_0_k, f_0_k: [N_BUS, CHANNELS_GC_IN]
+            pd, qd     : [N_BUS] or [N_BUS, 1]
 
         Returns:
-            out: [N_GEN, 2]  # (PG, VG)
+            gen_out: [N_GEN, 2]  (PG, VG)
+            v_out  : [N_BUS, 2]  (e, f)
         """
 
-        # ----- Graph convolution block: 3 layers -----
-        # Each GraphConv already applies tanh, following Eq. (7)/(18)
+        # GraphConv block
         e, f = self.gc1(e_0_k, f_0_k, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
         e, f = self.gc2(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
-        e, f = self.gc3(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
 
-        # Combine e, f as the node feature matrix for the FC block
-        # Shape: [N_BUS, 2 * CHANNELS_GC_OUT]
-        h = torch.cat([e, f], dim=1)
+        # Node features → FC trunk
+        h = torch.cat([e, f], dim=1)            # [N_BUS, 2*Cout]
+        h_flat = h.view(-1)                     # [N_BUS*2*Cout]
+        h_fc1 = self.act_fc(self.fc1(h_flat))   # [NEURONS_FC]
 
-        # ----- Flatten and pass through FC block -----
-        h_flat = h.view(-1)  # [2 * N_BUS * CHANNELS_GC_OUT]
-        h_fc1 = self.act_fc(self.fc1(h_flat))
-        h_fc2 = self.act_fc(self.fc2(h_fc1))
-        out = self.fc3(h_fc2)  # [N_GEN * 2]
-        out = out.view(N_GEN, 2)  # [N_GEN, 2] for PG and VG
+        # Heads
+        gen_flat = self.fc_gen(h_fc1)           # [N_GEN*2]
+        v_flat = self.fc_v(h_fc1)               # [N_BUS*2]
 
-        return out
+        gen_out = gen_flat.view(N_GEN, 2)
+        v_out = v_flat.view(N_BUS, 2)
+
+        return gen_out, v_out

@@ -81,10 +81,10 @@
 
 `model_01.py` (GCNN predictor):
 - Inputs: e_0_k,f_0_k [N_BUS,Cin]; pd,qd [N_BUS]; g_diag,b_diag [N_BUS]; g_ndiag,b_ndiag [N_BUS,N_BUS].
-- Output: [N_GEN,2] (currently 3×2 for case6ww; interpret as PG,QG or PG,Vm pending final mapping).
-- Implemented: GraphConv layers (concat fix), dense operator message passing.
+- Outputs: gen_out [N_GEN,2]=(PG,VG) and v_out [N_BUS,2]=(e,f) for physics loss.
+- Implemented: 2×GraphConv → shared FC → two heads (gen, voltage).
 - Pending: feature iteration (III.C eqs 8–25); z‑score normalization; physics losses L_PG, L_{Δ,P𝓧}.
-- Next tasks: (1) adapter tensor loader (2) generator mask (3) shape unit test (4) construct_features loop (5) configurable depth/activation (6) PG bounds clamp.
+- Next tasks: (1) adapter tensor loader (2) generator mask/A_g2b (3) shape unit test for both heads (4) construct_features loop (5) configurable depth/activation (6) PG bounds clamp.
 - Risks: overfit on 6‑bus; scaling to 39‑bus needs sparsity; enforce index alignment assertions.
 
 
@@ -133,7 +133,7 @@
 
 * [x] `GraphConv` (done conceptually).
 * [x] `GCNN_OPF_01` (only minor shape tests left).
-* Write a quick unit test to check `model(e_0_k, f_0_k, pd, qd) \rightarrow \text{shape } [N\_GEN, 2]`.
+* Write a quick unit test to check `model(e_0_k, f_0_k, pd, qd)` returns `(gen_out [N_GEN,2], v_out [N_BUS,2])`.
 
 ---
 
