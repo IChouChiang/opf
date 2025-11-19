@@ -53,7 +53,7 @@ def main():
     print(f"  f_0_k shape: {f_0_k.shape}")  # Expected: [6, 8]
 
     # Check voltage magnitudes (should be ~1.0 after normalization)
-    v_mag = torch.sqrt(e_0_k ** 2 + f_0_k ** 2)
+    v_mag = torch.sqrt(e_0_k**2 + f_0_k**2)
     print(f"\nVoltage magnitudes (should be ~1.0 per iteration):")
     for i in range(k):
         print(

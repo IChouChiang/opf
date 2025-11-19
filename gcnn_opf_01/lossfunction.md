@@ -1,25 +1,133 @@
 # Physics-Guided Residual Loss Implementation for GCNN_OPF_01  
-This document specifies the **math**, **data flow**, and **APIs** required to
-complete the physics-based correlative loss term used in Gao et al.
+This document specifies the **math**, **data flow**, and **APIs** for the
+physics-based correlative loss term used in Gao et al.
 "A Physics-Guided Graph Convolution Neural Network for Optimal Power Flow."
+
+## Status: ✅ IMPLEMENTED
+
+**Implementation:** `loss_model_01.py`  
+**Test:** Validated with 2-head GCNN architecture in `model_01.py`
+
+---
 
 ## 1. Overview
 
-We want to implement the loss function:
-L = L_supervised + κ · L_PG_residual.
+We implement the loss function:  
+**L = L_supervised + κ · L_Δ,PG**
 
 Where:
-- **L_supervised** = MSE(predicted PG vs OPF labels)
-- **L_PG_residual** = physics residual loss enforcing nodal active-power balance
+- **L_supervised** = MSE(predicted PG vs OPF labels) + MSE(predicted VG vs labels)
+- **L_Δ,PG** = physics residual loss enforcing nodal active-power balance
   using predicted voltages (e,f) and admittance matrices (G,B).
 
 This requires:
-- Access to **final graph-convolution voltages** e,f from GCNN_OPF_01.
+- Access to **final graph-convolution voltages** e,f from GCNN_OPF_01's v_head.
 - Bus-level predicted generation P_G^out (scatter from generators to buses).
 - Demand vector PD.
 - The full Ybus = G + jB for the topology used in the sample.
 
 We use **Cartesian full-node power balance** (Eq. (8) in the paper).
+
+---
+
+## 2. Implemented Functions
+
+### 2.1. `build_A_g2b(N_BUS, gen_bus_indices)`
+Creates generator-to-bus incidence matrix [N_BUS, N_GEN].
+- Sets A_g2b[gen_bus_indices[g], g] = 1.0
+- Used to scatter generator outputs to bus-level injections
+
+### 2.2. `f_pg_from_v(v_out, pd, G, B)`
+Computes PG from predicted voltages using power flow equation (Eq. 8).
+- Input: v_out [N_BUS, 2] = (e, f), pd [N_BUS], G/B [N_BUS, N_BUS]
+- Computes: PG = PD + e·(G@e - B@f) + f·(G@f + B@e)
+- Returns: PG_physics [N_BUS]
+
+### 2.3. `correlative_loss_pg(...)`
+Main loss function combining supervised and physics terms.
+- Supervised: MSE(gen_out vs gen_labels) for both PG and VG
+- Physics: MSE(A_g2b·PG_pred vs f_pg_from_v(v_out))
+- Returns: L_supervised + kappa·L_Δ,PG
+
+**Signature:**
+```python
+correlative_loss_pg(
+    gen_out,         # [N_GEN, 2] = (PG, VG) predictions
+    v_out,           # [N_BUS, 2] = (e, f) voltage predictions
+    gen_labels,      # [N_GEN, 2] = (PG_true, VG_true)
+    pd,              # [N_BUS] demand
+    G, B,            # [N_BUS, N_BUS] admittance matrices
+    gen_bus_indices, # [N_GEN] generator bus locations
+    kappa=0.1        # physics loss weight
+)
+```
+
+---
+
+## 3. Model Integration
+
+### 3.1. GCNN_OPF_01 Forward Pass
+Returns two outputs:
+```python
+gen_out, v_out = model(e_0_k, f_0_k, pd, qd, ...)
+# gen_out: [N_GEN, 2] = (PG, VG)
+# v_out:   [N_BUS, 2] = (e, f)
+```
+
+### 3.2. Training Loop Example
+```python
+from loss_model_01 import correlative_loss_pg
+
+gen_out, v_out = model(e_0_k, f_0_k, pd, qd, ...)
+
+loss = correlative_loss_pg(
+    gen_out, v_out, gen_labels,
+    pd, G, B, gen_bus_indices,
+    kappa=0.1
+)
+
+loss.backward()
+optimizer.step()
+```
+
+---
+
+## 4. Technical Notes
+
+### Units
+- All quantities in **per-unit (p.u.)** — matches PYPOWER convention after `/baseMVA`
+- No MW/MVAr mixing
+
+### Voltage Range
+- e, f outputs from v_head use `tanh` activation → range [-1, 1]
+- Physical interpretation: normalized Cartesian voltage components
+
+### Generator Scattering
+- `A_g2b @ gen_out[:, 0]` maps generator PG to bus-level injections
+- Ensures physics residual computed at all buses, not just generator buses
+
+### Reactive Power
+- Current implementation focuses on active power (PG) physics
+- Reactive power (QG) validation can be added via similar f_qg_from_v() function
+
+---
+
+## 5. Implementation Status
+
+- ✅ Generator-to-bus incidence matrix (`build_A_g2b`)
+- ✅ Physics PG computation from voltages (`f_pg_from_v`)
+- ✅ Correlative loss with supervised + physics terms (`correlative_loss_pg`)
+- ✅ Integration with 2-head GCNN architecture
+- ⏳ Training loop implementation (next step)
+- ⏳ Reactive power physics validation (future enhancement)
+
+---
+
+## 6. References
+
+- Equation (8): Active power balance in Cartesian coordinates
+- Section IV.B: Correlative loss formulation
+- Paper: Gao et al. "A Physics-Guided Graph Convolution Neural Network for Optimal Power Flow"
 
 ## 2. Required Inputs
 

@@ -90,15 +90,17 @@
 
 ## To-do list (in order)
 
-### 1. Network & config
+### 1. Network & config ✅ COMPLETE
 
 - [x] Write `sample_config_model_01.py` (load case, compute basic metadata).
 - [x] Decide 5 line contingencies and implement `apply_topology(ppc_int, topo_id)`.
 - [x] **Migrate from case39 to case6ww** for faster AC-OPF solving.
+- [x] Add `extract_gen_limits()` for generator bounds extraction.
+- [x] Fix `build_G_B_operators()` for PyTorch tensor compatibility.
 
 ---
 
-### 2. Scenario Generator
+### 2. Scenario Generator ✅ COMPLETE
 
 - [x] Implement scenario generator with fluctuation, RES sampling, target scaling, RES-as-negative-load, and `allow_negative_pd` flag.
 - [x] Debug on 3 samples (case6ww): penetration (method 1) stable at ~30%, negative PD disabled, power factor correction applied.
@@ -110,30 +112,36 @@
 - [x] Implement `solve_ac_opf(ppc_base, pd, qd, topo_id)` (Pyomo+Gurobi) — using shared `src/helpers_ac_opf.py`.
 - [x] Test on a few manually constructed scenarios — tested with 3 RES scenarios, all solve optimally.
 - [ ] Loop over 12k scenarios and fill arrays for `PD_all`, `QD_all`, `topo_all`, `PG_all`, `VG_all`.
-- [ ] Save to `opf39_dataset_v1.npz`.
+- [ ] Save to `opf6ww_dataset_v1.npz`.
 
 ---
 
-### 4. Model-Informed Feature Construction
+### 4. Model-Informed Feature Construction ✅ COMPLETE
 
-- [ ] Implement `construct_features(ppc_base, pd, qd, topo_id, num_iter=7)` according to III.C (Eqs. 8-9, 16-22, 23-25).
-- [ ] Verify for one sample that features don't diverge and normalization work.
+- [x] Implement `construct_features()` according to III.C (Eqs. 16-25) — **feature_construction_model_01.py**.
+- [x] Implement `construct_features_from_ppc()` wrapper with generator limits extraction.
+- [x] Verify for one sample that features don't diverge and normalization works — **test_feature_construction.py** ✓.
+- [x] Fix tensor indexing for generator bus operations.
 - [ ] Decide: precompute $e\_0\_k$, $f\_0\_k$ for all samples into a new NPZ, or compute on the fly in Dataset.
 
 ---
 
 ### 5. PyTorch Dataset + DataLoader
 
-- [ ] Implement `OPF39Dataset` that reads NPZ (+ maybe calls `construct_features`).
+- [ ] Implement `OPF6WWDataset` that reads NPZ (+ maybe calls `construct_features`).
 - [ ] Implement z-score normalization (fit on training set, save mean/std).
 
 ---
 
-### 6. Model wiring (GCNN\_OPF\_01)
+### 6. Model wiring (GCNN\_OPF\_01) ✅ ARCHITECTURE COMPLETE
 
-* [x] `GraphConv` (done conceptually).
-* [x] `GCNN_OPF_01` (only minor shape tests left).
-* Write a quick unit test to check `model(e_0_k, f_0_k, pd, qd)` returns `(gen_out [N_GEN,2], v_out [N_BUS,2])`.
+- [x] `GraphConv` implemented with physics-guided convolution.
+- [x] `GCNN_OPF_01` with two-head architecture: gen_head [N_GEN,2] and v_head [N_BUS,2].
+- [x] Physics-informed loss functions in **loss_model_01.py**:
+  - [x] `build_A_g2b()`: generator-to-bus incidence matrix.
+  - [x] `f_pg_from_v()`: compute PG from voltages using power flow equations.
+  - [x] `correlative_loss_pg()`: L_supervised + κ·L_Δ,PG.
+- [ ] Write unit test to check `model(e_0_k, f_0_k, pd, qd, ...)` returns correct shapes.
 
 ---
 
@@ -141,13 +149,15 @@
 
 - [ ] Implement basic training with $\mathcal{L}_{sup}$ (MSE) only.
 - [ ] Monitor loss, maybe simple validation error.
+- [ ] Integrate correlative loss $\mathcal{L}_{\Delta, PG}$ from `loss_model_01.py`.
 
 ---
 
-### 8. (Optional) Correlative loss
+### 8. Correlative loss ✅ IMPLEMENTED
 
-- [ ] Implement $\mathcal{L}_{PG}(\mathbf{v}_{pred})$ and add $k \mathcal{L}_{\Delta, P\mathcal{X}}$; term to loss.
-- [ ] Fine-tune using that as in the paper.
+- [x] Implement $\mathcal{L}_{PG}(\mathbf{v}_{pred})$ and $\mathcal{L}_{\Delta, P\mathcal{X}}$ — **loss_model_01.py**.
+- [x] API: `correlative_loss_pg(gen_out, v_out, gen_labels, pd, G, B, gen_bus_indices, kappa=0.1)`.
+- [ ] Fine-tune using correlative loss in training loop.
 
 ## GCNN OPF Data Loading Notes
 

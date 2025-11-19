@@ -20,6 +20,14 @@ opf/
 ├─ Week3/              # ML prediction: DCOPF → MLP, case118
 │   ├─ samples/        # Training data (chunked .npz)
 │   └─ results/        # Trained models
+├─ gcnn_opf_01/        # Physics-guided GCNN for OPF (case6ww)
+│   ├─ model_01.py                # 2-head GCNN architecture
+│   ├─ loss_model_01.py           # Physics-informed loss functions
+│   ├─ feature_construction_model_01.py  # Model-informed features (Sec III-C)
+│   ├─ sample_config_model_01.py  # case6ww config & operators
+│   ├─ sample_generator_model_01.py  # RES scenario generator
+│   ├─ config_model_01.py         # Dataclass configs
+│   └─ *.md                       # Design docs & formulas
 ├─ src/                # Reusable modules
 │   ├─ ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
 │   ├─ helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
@@ -28,6 +36,9 @@ opf/
 ├─ tests/              # Test harnesses and baselines
 │   ├─ test_case39.py         # IEEE 39-bus AC-OPF
 │   ├─ test_case57.py         # IEEE 57-bus AC-OPF
+│   ├─ test_feature_construction.py  # Feature construction validation
+│   ├─ test_sample_generator.py     # Scenario generator + AC-OPF
+│   ├─ test_topology_outages.py     # N-1 contingency verification
 │   ├─ case39_baseline.py     # PYPOWER reference (39-bus)
 │   └─ case57_baseline.py     # PYPOWER reference (57-bus)
 ├─ outputs/            # Generated files (git-ignored)
@@ -108,11 +119,59 @@ See `.github/copilot-instructions.md` for detailed architecture patterns and wor
 
 ---
 
+## 🧠 GCNN OPF Subproject (gcnn_opf_01/)
+
+### Overview
+Physics-guided Graph Convolutional Neural Network for optimal power flow prediction on **case6ww** (6-bus Wood & Wollenberg system).
+
+### Architecture
+- **Model:** 2×GraphConv → shared FC → two heads
+  - `gen_head`: [N_GEN=3, 2] → (PG, VG)
+  - `v_head`: [N_BUS=6, 2] → (e, f) for physics validation
+- **Feature construction:** k=8 iterations of model-informed voltage estimation (Section III-C)
+  - Iterative PG/QG computation with generator clamping (Eqs. 23-24)
+  - Voltage updates via power flow equations (Eqs. 16-17, 19-22)
+  - Voltage magnitude normalization (Eq. 25)
+- **Loss:** L_supervised + κ·L_Δ,PG (correlative physics-informed loss)
+  - Supervised: MSE on (PG, VG) predictions
+  - Physics: MSE on power balance residuals using predicted voltages
+
+### Key Files
+- `feature_construction_model_01.py`: Implements iterative voltage estimation
+- `loss_model_01.py`: Physics-informed loss functions
+- `model_01.py`: GCNN architecture with GraphConv layers
+- `sample_config_model_01.py`: case6ww operators (G, B matrices)
+- `sample_generator_model_01.py`: RES scenario generator (wind/PV)
+
+### Testing
+```bash
+# Feature construction test
+python tests/test_feature_construction.py  # ✓ Validated [6,8] features, normalized voltages
+
+# Scenario generation + AC-OPF
+python tests/test_sample_generator.py      # ✓ 3 scenarios, 30% RES, all optimal
+
+# Topology verification
+python tests/test_topology_outages.py      # ✓ N-1 contingencies verified
+```
+
+### Status
+- ✅ Model architecture (2-head GCNN)
+- ✅ Feature construction (k=8 iterations)
+- ✅ Physics-informed loss functions
+- ✅ Scenario generator (Gaussian load + Weibull wind + Beta PV)
+- ✅ AC-OPF integration (using `src/helpers_ac_opf.py`)
+- ⏳ Dataset generation (12k samples planned)
+- ⏳ Training pipeline
+
+---
+
 ## ✅ Completed Milestones
 
 - [x] Week 2: DC-OPF with linear constraints, PTDF analysis
 - [x] Week 3: ML-based OPF prediction (MLP: P_D → P_G), 10k samples
 - [x] Week 4: AC-OPF Cartesian formulation, Gurobi nonconvex solve, PYPOWER baseline validation
+- [x] GCNN: Model architecture, feature construction, physics loss (gcnn_opf_01/)
 
 ---
 

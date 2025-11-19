@@ -65,6 +65,18 @@ Week3/
   ├── samples/          # Training data (git-ignored if large)
   └── results/          # Model outputs (git-ignored)
 
+gcnn_opf_01/            # Physics-guided GCNN subproject (case6ww)
+  ├── model_01.py                        # 2-head GCNN: gen_head + v_head
+  ├── loss_model_01.py                   # Physics-informed loss (correlative)
+  ├── feature_construction_model_01.py   # k-iteration voltage estimation (Sec III-C)
+  ├── sample_config_model_01.py          # case6ww operators, topology, RES config
+  ├── sample_generator_model_01.py       # RES scenario generator
+  ├── config_model_01.py                 # Dataclass configs
+  ├── gcnn_opf_01.md                     # Design notes & to-do tracking
+  ├── formulas_model_01.md               # Mathematical formulas (Eqs 1-25)
+  ├── lossfunction.md                    # Loss function specification
+  └── Model-Informed Feature Construction (III-C) — Copilot-Ready Guide.md
+
 src/
   ├── __init__.py             # Package initialization
   ├── ac_opf_create.py        # Pyomo AbstractModel (Cartesian voltages)
@@ -73,10 +85,13 @@ src/
   └── interactive_viz.py      # Interactive network visualization (PyVis)
 
 tests/
-  ├── test_case39.py          # IEEE 39-bus AC-OPF test harness
-  ├── test_case57.py          # IEEE 57-bus AC-OPF test harness
-  ├── case39_baseline.py      # PYPOWER reference (39-bus)
-  └── case57_baseline.py      # PYPOWER reference (57-bus)
+  ├── test_case39.py                # IEEE 39-bus AC-OPF test harness
+  ├── test_case57.py                # IEEE 57-bus AC-OPF test harness
+  ├── test_feature_construction.py  # Feature construction validation (case6ww)
+  ├── test_sample_generator.py      # Scenario generator + AC-OPF integration
+  ├── test_topology_outages.py      # N-1 contingency verification
+  ├── case39_baseline.py            # PYPOWER reference (39-bus)
+  └── case57_baseline.py            # PYPOWER reference (57-bus)
 
 outputs/                      # Generated files (git-ignored)
 ```
@@ -113,6 +128,45 @@ python test_case57.py  # IEEE 57-bus
 3. Prepare instance data: `data_dict, meta = ppc_to_pyomo_data_for_create_instance(ppc)`
 4. Create instance: `instance = m.create_instance(data=data_dict)`
 5. Solve: `solver = pyo.SolverFactory('gurobi'); result = solver.solve(instance)`
+
+### Running GCNN Feature Construction (gcnn_opf_01/)
+**Quick test (case6ww):**
+```python
+import sys
+sys.path.insert(0, 'gcnn_opf_01')
+
+from pypower.api import case6ww
+from pypower.ext2int import ext2int
+from feature_construction_model_01 import construct_features_from_ppc
+
+ppc = case6ww()
+ppc_int = ext2int(ppc)
+
+# Construct features: e_0_k, f_0_k [N_BUS, k=8]
+e_0_k, f_0_k = construct_features_from_ppc(
+    ppc_int=ppc_int,
+    pd=None,  # Uses case defaults if None
+    qd=None,
+    k=8
+)
+
+print(f"Features shape: {e_0_k.shape}")  # [6, 8]
+print(f"Voltage magnitudes: {(e_0_k**2 + f_0_k**2).sqrt().mean(0)}")  # ~1.0
+```
+
+**From command line:**
+```bash
+cd tests
+python test_feature_construction.py  # Validates shapes & normalization
+python test_sample_generator.py      # 3 RES scenarios + AC-OPF
+python test_topology_outages.py      # N-1 contingency verification
+```
+
+**Shared utilities in `gcnn_opf_01/`:**
+- `construct_features(...)`: Core k-iteration algorithm (Eqs. 16-25)
+- `construct_features_from_ppc(ppc_int, pd, qd, k)`: Wrapper with generator limits extraction
+- `extract_gen_limits(ppc_int)`: Extracts PMIN/PMAX/QMIN/QMAX from ppc_int['gen']
+- `build_G_B_operators(ppc_int)`: Constructs G, B, g_diag, b_diag, g_ndiag, b_ndiag tensors
 
 ### Type Checking with Pyright
 - Config: `pyrightconfig.json` at root

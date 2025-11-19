@@ -1,4 +1,12 @@
 # Model-Informed Feature Construction (III-C) — Copilot-Ready Guide
+
+## Status: ✅ IMPLEMENTED
+
+**Implementation:** `feature_construction_model_01.py`  
+**Test:** `tests/test_feature_construction.py` ✓ (case6ww, [6,8] features, normalized voltages)
+
+---
+
 This guide reproduces *exactly* the feature-construction mechanism in Fig. 4 of  
 **"A Physics-Guided Graph Convolution Neural Network for Optimal Power Flow"**  
 but adapted for **k = 8** iterations (matching our CHANNELS_GC_IN = 8).
