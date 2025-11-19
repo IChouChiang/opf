@@ -193,7 +193,7 @@ def build_G_B_operators(ppc_int):
     # makeYbus returns complex Ybus
     Ybus, Yf, Yt = makeYbus(baseMVA, bus, branch)
 
-    Ybus_np = Ybus.todense()  # or .A if it's numpy matrix; adjust if needed
+    Ybus_np = np.asarray(Ybus.todense())  # Convert matrix to standard array
     G_np = np.real(Ybus_np)
     B_np = np.imag(Ybus_np)
 
@@ -231,3 +231,40 @@ def get_operators_for_topology(topo_id):
     G, B, g_diag, b_diag, g_ndiag, b_ndiag = build_G_B_operators(ppc_int_topo)
 
     return ppc_int_topo, G, B, g_diag, b_diag, g_ndiag, b_ndiag
+
+
+def extract_gen_limits(ppc_int):
+    """
+    Extract generator limits from ppc_int['gen'] for feature construction.
+
+    PYPOWER/MATPOWER gen columns (0-indexed):
+        0: GEN_BUS    - bus number (internal)
+        3: QMAX       - reactive power max (MVAr)
+        4: QMIN       - reactive power min (MVAr)
+        8: PMAX       - active power max (MW)
+        9: PMIN       - active power min (MW)
+
+    Returns:
+        gen_bus_indices : np.ndarray [N_GEN], internal bus indices (0-based)
+        PG_min, PG_max  : torch.Tensor [N_GEN], p.u.
+        QG_min, QG_max  : torch.Tensor [N_GEN], p.u.
+        gen_mask        : torch.Tensor [N_BUS], bool mask (True at generator buses)
+    """
+    baseMVA = float(ppc_int["baseMVA"])
+    gen = ppc_int["gen"]
+    N_BUS = ppc_int["bus"].shape[0]
+    N_GEN = gen.shape[0]
+
+    # Extract bus indices and limits
+    gen_bus_indices = gen[:, 0].astype(int)  # Internal bus indices
+
+    PG_min = torch.tensor(gen[:, 9] / baseMVA, dtype=torch.float32)  # PMIN → p.u.
+    PG_max = torch.tensor(gen[:, 8] / baseMVA, dtype=torch.float32)  # PMAX → p.u.
+    QG_min = torch.tensor(gen[:, 4] / baseMVA, dtype=torch.float32)  # QMIN → p.u.
+    QG_max = torch.tensor(gen[:, 3] / baseMVA, dtype=torch.float32)  # QMAX → p.u.
+
+    # Create generator mask [N_BUS] (True at generator buses)
+    gen_mask = torch.zeros(N_BUS, dtype=torch.bool)
+    gen_mask[torch.tensor(gen_bus_indices, dtype=torch.long)] = True
+
+    return gen_bus_indices, PG_min, PG_max, QG_min, QG_max, gen_mask

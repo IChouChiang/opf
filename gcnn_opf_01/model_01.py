@@ -185,7 +185,7 @@ class GCNN_OPF_01(nn.Module):
 
         # Heads
         self.fc_gen = nn.Linear(NEURONS_FC, N_GEN * 2)  # (PG, VG)
-        self.fc_v = nn.Linear(NEURONS_FC, N_BUS * 2)    # (e, f)
+        self.fc_v = nn.Linear(NEURONS_FC, N_BUS * 2)  # (e, f)
 
     def forward(
         self,
@@ -213,13 +213,13 @@ class GCNN_OPF_01(nn.Module):
         e, f = self.gc2(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
 
         # Node features → FC trunk
-        h = torch.cat([e, f], dim=1)            # [N_BUS, 2*Cout]
-        h_flat = h.view(-1)                     # [N_BUS*2*Cout]
-        h_fc1 = self.act_fc(self.fc1(h_flat))   # [NEURONS_FC]
+        h = torch.cat([e, f], dim=1)  # [N_BUS, 2*Cout]
+        h_flat = h.view(-1)  # [N_BUS*2*Cout]
+        h_fc1 = self.act_fc(self.fc1(h_flat))  # [NEURONS_FC]
 
         # Heads
-        gen_flat = self.fc_gen(h_fc1)           # [N_GEN*2]
-        v_flat = self.fc_v(h_fc1)               # [N_BUS*2]
+        gen_flat = self.fc_gen(h_fc1)  # [N_GEN*2]
+        v_flat = self.fc_v(h_fc1)  # [N_BUS*2]
 
         gen_out = gen_flat.view(N_GEN, 2)
         v_out = v_flat.view(N_BUS, 2)

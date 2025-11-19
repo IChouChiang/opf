@@ -164,43 +164,155 @@ $$
 
 ### Correlative Learning Loss Function
 
+We denote the GCNN-predicted complex bus voltages by  
+$$
+V_{\text{out}} = e_{\text{out}} + j f_{\text{out}},
+$$
+where \(e_{\text{out}}, f_{\text{out}} \in \mathbb{R}^N\).  
+Let the complex admittance matrix be
+$$
+Y = G + jB,
+$$
+with \(G, B \in \mathbb{R}^{N\times N}\).
+
+---
+
+#### 1. Supervised Loss
+
+The standard supervised OPF training loss is:
+$$
+L_{\text{supervised}}
+    = \mathbb{E}\big[\|y_{\text{out}} - y_{\text{label}}\|_2^2\big],
+    \tag{26}
+$$
+where \(y_{\text{out}}\) represents the predicted OPF variables \((P_G, Q_G, V_G, ...)\) and  
+\(y_{\text{label}}\) is the ground-truth OPF solution.
+
+---
+
+#### 2. Physics-Based Power Computation
+
+Given the predicted voltages \(V_{\text{out}} = e_{\text{out}} + j f_{\text{out}}\), let
+$$
+|V_i| = \sqrt{e_i^2 + f_i^2}, \qquad
+\theta_i = \mathrm{atan2}(f_i, e_i).
+$$
+
+##### 2.1 Active power injection
+
+The AC power-flow active-power injection at bus \(i\) is
+$$
+P_i(V_{\text{out}})
+= \sum_{k=1}^N |V_i||V_k|
+\left[
+G_{ik}\cos(\theta_i-\theta_k) +
+B_{ik}\sin(\theta_i-\theta_k)
+\right].
+\tag{PF-P}
+$$
+
+##### 2.2 Reactive power injection
+
+Similarly,
+$$
+Q_i(V_{\text{out}})
+= \sum_{k=1}^N |V_i||V_k|
+\left[
+G_{ik}\sin(\theta_i-\theta_k) -
+B_{ik}\cos(\theta_i-\theta_k)
+\right].
+\tag{PF-Q}
+$$
+
+These define the physics-based operators:
+$$
+f_{P_G}(V_{\text{out}}),\qquad
+f_{Q_G}(V_{\text{out}}),\qquad
+f_{P_L}(V_{\text{out}}),\qquad
+f_{Q_L}(V_{\text{out}}).
+\tag{PF-f}
+$$
+
+---
+
+#### 3. Correlative Learning Losses
+
+The GCNN also predicts the generator and load powers:
+$$
+P_{G,\text{out}},\quad Q_{G,\text{out}},\quad
+P_{L,\text{out}},\quad Q_{L,\text{out}}.
+$$
+Physics consistency is imposed by matching these with the values computed from \(V_{\text{out}}\) via (PF-P) and (PF-Q).
+
+##### 3.1 Active power correlation at generators
 
 $$
-L_{\text{supervised}} = \mathbb{E}\left[ (y_{\text{out}} - y_{\text{label}})^2 \right],
-\tag{26}
-$$
-
-$$
-L_{,\!P_G} = \mathbb{E}\left[ (P_{G,\text{out}} - f_{P_G}(V_{\text{out}}))^2 \right],
+L_{,\!P_G}
+= \mathbb{E}
+\left[
+\|P_{G,\text{out}} - f_{P_G}(V_{\text{out}})\|_2^2
+\right].
 \tag{27}
 $$
 
+##### 3.2 Reactive power correlation at generators
+
 $$
-L_{,\!Q_G} = \mathbb{E}\left[ (Q_{G,\text{out}} - f_{Q_G}(V_{\text{out}}))^2 \right],
+L_{,\!Q_G}
+= \mathbb{E}
+\left[
+\|Q_{G,\text{out}} - f_{Q_G}(V_{\text{out}})\|_2^2
+\right].
 \tag{28}
 $$
 
+##### 3.3 Active power correlation at loads
+
 $$
-L_{,\!P_L} = \mathbb{E}\left[ (P_{L,\text{out}} - f_{P_L}(V_{\text{out}}))^2 \right],
+L_{,\!P_L}
+= \mathbb{E}
+\left[
+\|P_{L,\text{out}} - f_{P_L}(V_{\text{out}})\|_2^2
+\right].
 \tag{29}
 $$
 
+##### 3.4 Reactive power correlation at loads
+
 $$
-L_{,\!Q_L} = \mathbb{E}\left[ (Q_{L,\text{out}} - f_{Q_L}(V_{\text{out}}))^2 \right],
+L_{,\!Q_L}
+= \mathbb{E}
+\left[
+\|Q_{L,\text{out}} - f_{Q_L}(V_{\text{out}})\|_2^2
+\right].
 \tag{30}
 $$
 
+These losses enforce that the GCNN’s predicted voltages imply power injections consistent with the network’s predicted OPF quantities.
+
+---
+
+#### 4. Combined Correlative Loss
+
+In the simplified correlative-learning model, the combined loss is:
 $$
-L = L_{\text{supervised}} + \kappa\,L_{,\!P_G}.
+L
+= L_{\text{Supervised}}
++ \kappa\,L_{,\!P_G},
 \tag{35}
 $$
+where \(\kappa > 0\) is a weighting hyperparameter emphasizing active-power consistency.
+
+---
+
+#### Interpretation
+
+- **\(L_{\text{supervised}}\)** ensures the network learns the OPF labels directly.  
+- **\(L_{,\!P_G}\)** requires that the predicted voltages \(V_{\text{out}}\) produce physically consistent generator active powers through the AC power-flow model.  
+- The full set of physics losses \((L_{,\!P_G}, L_{,\!Q_G}, L_{,\!P_L}, L_{,\!Q_L})\) can be used to impose deeper physical coupling between node voltages and power injections.  
+- This improves **generalization**, **feasibility**, and **noise-resilience**, especially when training data is limited.
 
 
-
-- $y_{\text{out}}$ denotes the predicted output vector of the GCNN (e.g. the set of OPF solution variables), and $y_{\text{label}}$ is the ground-truth target vector (from an actual OPF solution). Equation (26) is the standard supervised mean-squared-error loss.
-- $f_{P_G}(V_{\text{out}}), f_{Q_G}(V_{\text{out}}), f_{P_L}(V_{\text{out}}), f_{Q_L}(V_{\text{out}})$ are functions derived from the physical power flow model (variants of the AC power flow equations) that calculate the expected $P_G, Q_G, P_L,$ and $Q_L$ values given the predicted node voltages $V_{\text{out}}$.
-- $L_{,!P_G}, L_{,!Q_G}, L_{,!P_L}, L_{,!Q_L}$ are additional loss terms that penalize any inconsistency between the network’s outputs and the values computed from those outputs using the physical equations. These extended terms encourage the predictions to obey the physical coupling relationships (for example, between node voltage and power injection) even without direct supervision on those quantities.
-- $\kappa$ is a weighting hyperparameter that emphasizes the active power balance term ($L_{,!P_G}$) in the total loss. The final loss $L$ in (35) combines the usual supervised loss with a scaled correlative loss term for active power, helping the model reduce nodal active power mismatches during training.
 
 ## Sample Generating
 
