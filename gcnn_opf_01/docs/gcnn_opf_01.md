@@ -285,3 +285,33 @@ Both models achieve the project goal (>90% accuracy) when evaluated correctly wi
 - `prepare_ac_opf_data` provides all core quantities to feed `model_01.py` after a light transformation step (diag/off-diag split and tensor conversion).
 - Voltage initialization logic is already demonstrated in `initialize_voltage_from_flatstart`; reuse it to create stable `e_0_k`, `f_0_k`.
 - No changes needed in helpers; add a thin loader in `gcnn_opf_01` to adapt outputs into PyTorch tensors ready for the GCNN.
+
+### Zero-Shot Generalization Test (2025-11-26)
+
+To evaluate the model's ability to generalize to unseen topologies, a "Zero-Shot" test was conducted using 3 specific N-1 contingencies that were **not** present in the training set.
+
+**Test Configuration:**
+- **Topologies:**
+  - Case 0: Line 3-5 outage
+  - Case 1: Line 1-5 outage
+  - Case 2: Line 2-4 outage
+- **Samples:** 1200 total (400 per topology)
+- **Model:** Final 1000-neuron model (Batch Size 24)
+
+**Results:**
+- **Generator Power (PG):**
+  - **P_PG (Error < 0.01 p.u.): 44.14%**
+  - R² = -2.00 (Poor generalization for dispatch)
+  - RMSE = 0.0972 p.u. (9.72 MW)
+  - MAPE = 9.85%
+
+- **Generator Voltage (VG):**
+  - **P_VG (Error < 0.001 p.u.): 91.86%**
+  - R² = 0.9946 (Excellent generalization for voltage)
+  - RMSE = 0.0007 p.u.
+  - MAPE = 0.04%
+
+**Analysis:**
+The model demonstrates **excellent generalization for voltage setpoints (VG)** even on unseen topologies, maintaining >90% accuracy. However, **active power dispatch (PG) generalization is poor** (44% accuracy, negative R²). This indicates that the mapping from topology/load to optimal power dispatch is highly non-linear and topology-dependent, requiring either:
+1.  Training on a wider variety of N-1 contingencies (N-k training).
+2.  Using the GCNN as a warm-start for a traditional solver rather than a direct replacement for unseen topologies.

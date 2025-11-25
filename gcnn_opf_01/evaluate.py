@@ -32,6 +32,12 @@ def parse_args():
         help="Directory containing test data",
     )
     parser.add_argument(
+        "--norm_stats_path",
+        type=str,
+        default=None,
+        help="Path to normalization stats (default: data_dir/norm_stats.npz)",
+    )
+    parser.add_argument(
         "--batch_size", type=int, default=64, help="Batch size for evaluation"
     )
     parser.add_argument(
@@ -176,10 +182,18 @@ def main():
     data_dir = Path(args.data_dir)
     print(f"\nLoading test dataset from: {data_dir}")
 
+    # Determine norm stats path
+    norm_stats_path = (
+        Path(args.norm_stats_path)
+        if args.norm_stats_path
+        else data_dir / "norm_stats.npz"
+    )
+    print(f"Using normalization stats from: {norm_stats_path}")
+
     test_dataset = OPFDataset(
         data_path=data_dir / "samples_test.npz",
         topo_operators_path=data_dir / "topology_operators.npz",
-        norm_stats_path=data_dir / "norm_stats.npz",
+        norm_stats_path=norm_stats_path,
         normalize=True,
         split="test",
     )

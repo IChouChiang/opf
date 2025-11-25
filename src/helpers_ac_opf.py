@@ -25,7 +25,11 @@ import warnings
 import numpy as np
 import multiprocessing
 import pyomo.environ as pyo
-from ac_opf_create import ac_opf_create
+
+try:
+    from ac_opf_create import ac_opf_create
+except ImportError:
+    from src.ac_opf_create import ac_opf_create
 
 # ---------------------------------------------------------------------------
 # Data preparation

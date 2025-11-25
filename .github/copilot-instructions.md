@@ -296,7 +296,11 @@ Follow **Conventional Commits** style with prefixes:
 - `docs: add cost scaling formula to copilot instructions`
 - `chore: delete case_to_col, ppc_to_g_b, vm_va_to_e_f utilities`
 
-## When to Ask for Clarification
+### When to Ask for Clarification
 - **Excel data files** mentioned in Week 3 Description but not in repo – ask user for file location
 - **Gurobi license** issues – ensure `gurobi.lic` is accessible
 - **Chunk size** for training data generation – confirm memory limits before batch processing
+
+### Long-Running Scripts
+- **Progress Bars:** Always include a progress bar (e.g., `tqdm`) for scripts that take a long time to run (e.g., dataset generation, training).
+- **Status Updates:** Print periodic status updates to the console to indicate progress and estimated time remaining.
