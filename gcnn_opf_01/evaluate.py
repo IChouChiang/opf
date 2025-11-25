@@ -91,6 +91,19 @@ def compute_metrics(predictions, labels):
     max_error_pg = np.max(np.abs(pg_pred - pg_label))
     max_error_vg = np.max(np.abs(vg_pred - vg_label))
 
+    # Probabilistic accuracy (Formula 37)
+    # P(|T - T_hat| < thr) - probability of error below threshold
+    # Thresholds: 1 MW for PG (assumes labels are in p.u., convert threshold)
+    # Note: If baseMVA=100, 1MW = 0.01 p.u.; adjust if needed
+    thr_pg = 0.01  # 1 MW in p.u. (assuming baseMVA=100)
+    thr_vg = 0.001  # 0.001 p.u. for voltage
+    
+    error_pg = np.abs(pg_pred - pg_label)
+    error_vg = np.abs(vg_pred - vg_label)
+    
+    p_pg = np.mean(error_pg < thr_pg) * 100  # Percentage
+    p_vg = np.mean(error_vg < thr_vg) * 100  # Percentage
+
     return {
         "mse_pg": mse_pg,
         "mse_vg": mse_vg,
@@ -105,6 +118,8 @@ def compute_metrics(predictions, labels):
         "r2_vg": r2_vg,
         "max_error_pg": max_error_pg,
         "max_error_vg": max_error_vg,
+        "p_pg": p_pg,
+        "p_vg": p_vg,
     }
 
 
@@ -221,6 +236,10 @@ def main():
 
     print("\n--- Overall ---")
     print(f"  Total MSE:  {metrics['mse_total']:.6f}")
+
+    print("\n--- Probabilistic Accuracy (Formula 37) ---")
+    print(f"  P_PG:       {metrics['p_pg']:.2f}% (errors < 0.01 p.u. / 1 MW)")
+    print(f"  P_VG:       {metrics['p_vg']:.2f}% (errors < 0.001 p.u.)")
 
     # Per-generator statistics
     print("\n--- Per-Generator Statistics (PG) ---")

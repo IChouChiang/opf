@@ -74,10 +74,16 @@ gcnn_opf_01/            # Physics-guided GCNN subproject (case6ww)
   ├── sample_config_model_01.py          # case6ww operators, topology, RES config
   ├── sample_generator_model_01.py       # RES scenario generator
   ├── config_model_01.py                 # Dataclass configs
-  ├── gcnn_opf_01.md                     # Design notes & to-do tracking
-  ├── formulas_model_01.md               # Mathematical formulas (Eqs 1-25)
-  ├── lossfunction.md                    # Loss function specification
-  └── Model-Informed Feature Construction (III-C) — Copilot-Ready Guide.md
+  ├── train.py                           # Training pipeline with physics loss
+  ├── evaluate.py                        # Model evaluation with probabilistic accuracy
+  ├── tune_batch_size.py                 # Hyperparameter tuning (with caching)
+  ├── data/                              # 12k samples (git-ignored)
+  ├── results/                           # Training artifacts (git-ignored)
+  └── docs/                              # Design documentation
+      ├── gcnn_opf_01.md                 # Design notes & status tracking
+      ├── formulas_model_01.md           # Mathematical formulas (Eqs 1-37)
+      ├── lossfunction.md                # Loss function specification
+      └── sample_gen_guide_model_01.md   # Sample generation guide
 
 src/
   ├── __init__.py             # Package initialization

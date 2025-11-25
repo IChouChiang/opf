@@ -373,3 +373,13 @@ $$
 \quad (i \in S_B),
 \tag{5}
 $$
+
+## Result Evaluate
+
+The performance is measured by the probabilistic accuracy.It reflects the probability of the prediction error less than a threshold. The thresholdsfor $PG$ and $VG$ are 1MW and 0.001 p.u., respectively.
+
+$$
+p = P\left(\left|T - \hat{T}\right| < thr\right) \tag{37}
+$$
+
+where $T$ and $\hat{T}$ are the predicted value and actual value, respectively, $thr$ is the threshold.

@@ -9,7 +9,7 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 **Key Technologies:** Pyomo, PYPOWER/MATPOWER, Gurobi, PyTorch, NumPy
 
 **Environment:** `opf311` (Anaconda)  
-**Current Phase:** Week 5 - GCNN Optimization & Documentation (Batch Size Tuned to 6)
+**Current Phase:** Week 5 - GCNN Optimization Complete (Batch Size = 6, R²=98.21%)
 
 ---
 
@@ -17,39 +17,46 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 
 ```
 opf/
-├─ Week2/              # DC-OPF: linear formulation, case9
-├─ Week3/              # ML prediction: DCOPF �?MLP, case118
-�?  ├─ samples/        # Training data (chunked .npz)
-�?  └─ results/        # Trained models
-├─ Week5/              # GCNN project documentation (Chinese)
-�?  └─ Week5.md        # Comprehensive documentation with results
-├─ gcnn_opf_01/        # Physics-guided GCNN for OPF (case6ww)
-�?  ├─ data/           # 12k samples (10k train, 2k test)
-�?  ├─ model_01.py                # 2-head GCNN architecture
-�?  ├─ loss_model_01.py           # Physics-informed loss functions
-�?  ├─ feature_construction_model_01.py  # Model-informed features (Sec III-C)
-�?  ├─ sample_config_model_01.py  # case6ww config & operators
-�?  ├─ sample_generator_model_01.py  # RES scenario generator
-�?  ├─ config_model_01.py         # Dataclass configs
-�?  └─ *.md                       # Design docs & formulas
-├─ src/                # Reusable modules
-�?  ├─ ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
-�?  ├─ helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
-�?  ├─ topology_viz.py        # Static network visualization
-�?  └─ interactive_viz.py     # Interactive visualization (PyVis)
-├─ tests/              # Test harnesses and baselines
-�?  ├─ test_case39.py         # IEEE 39-bus AC-OPF
-�?  ├─ test_case57.py         # IEEE 57-bus AC-OPF
-�?  ├─ test_feature_construction.py  # Feature construction validation
-�?  ├─ test_sample_generator.py     # Scenario generator + AC-OPF
-�?  ├─ test_topology_outages.py     # N-1 contingency verification
-�?  ├─ case39_baseline.py     # PYPOWER reference (39-bus)
-�?  └─ case57_baseline.py     # PYPOWER reference (57-bus)
-├─ outputs/            # Generated files (git-ignored)
-├─ .github/
-�?  └─ copilot-instructions.md
-├─ pyrightconfig.json
-└─ README.md
+├── Week2/              # DC-OPF: linear formulation, case9
+├── Week3/              # ML prediction: DCOPF → MLP, case118
+│   ├── samples/        # Training data (chunked .npz)
+│   └── results/        # Trained models
+├── Week5/              # GCNN project documentation (Chinese)
+│   └── Week5.md        # Comprehensive documentation with results
+├── gcnn_opf_01/        # Physics-guided GCNN for OPF (case6ww)
+│   ├── data/           # 12k samples (10k train, 2k test) [git-ignored]
+│   ├── results/        # Training results & tuning [git-ignored]
+│   ├── docs/           # Design documentation
+│   │   ├── gcnn_opf_01.md           # Main project notes & status
+│   │   ├── formulas_model_01.md     # Mathematical formulas
+│   │   └── *.md                     # Other guides
+│   ├── model_01.py                  # 2-head GCNN architecture
+│   ├── loss_model_01.py             # Physics-informed loss functions
+│   ├── feature_construction_model_01.py  # Model-informed features (Sec III-C)
+│   ├── sample_config_model_01.py    # case6ww config & operators
+│   ├── sample_generator_model_01.py # RES scenario generator
+│   ├── config_model_01.py           # Dataclass configs
+│   ├── train.py                     # Training pipeline
+│   ├── evaluate.py                  # Model evaluation
+│   └── tune_batch_size.py           # Hyperparameter tuning (with caching)
+├── src/                # Reusable modules
+│   ├── ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
+│   ├── helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
+│   ├── topology_viz.py        # Static network visualization
+│   └── interactive_viz.py     # Interactive visualization (PyVis)
+├── tests/              # Test harnesses and baselines
+│   ├── test_case39.py         # IEEE 39-bus AC-OPF
+│   ├── test_case57.py         # IEEE 57-bus AC-OPF
+│   ├── test_feature_construction.py  # Feature construction validation
+│   ├── test_sample_generator.py      # Scenario generator + AC-OPF
+│   ├── test_topology_outages.py      # N-1 contingency verification
+│   ├── case39_baseline.py     # PYPOWER reference (39-bus)
+│   └── case57_baseline.py     # PYPOWER reference (57-bus)
+├── outputs/            # Generated files (git-ignored)
+├── .github/
+│   └── copilot-instructions.md
+├── pyrightconfig.json
+└── README.md
 ```
 
 ---
@@ -159,15 +166,17 @@ python tests/test_sample_generator.py      # �?3 scenarios, 30% RES, all optim
 python tests/test_topology_outages.py      # �?N-1 contingencies verified
 ```
 
-### Status (Completed 2025-11-19)
-- �?Model architecture (2-head GCNN)
-- �?Feature construction (k=8 iterations)
-- �?Physics-informed loss functions
-- �?Scenario generator (Gaussian load + Weibull wind + Beta PV)
-- �?AC-OPF integration (using `src/helpers_ac_opf.py`)
-- �?Dataset generation (12k samples, 96% success rate)
-- �?Training pipeline (23 epochs, early stopping)
-- �?Model evaluation (R²=0.9765 for PG, R²=0.9999 for VG)
+### Status (Completed 2025-11-25)
+- ✅ Model architecture (2-head GCNN)
+- ✅ Feature construction (k=8 iterations)
+- ✅ Physics-informed loss functions
+- ✅ Scenario generator (Gaussian load + Weibull wind + Beta PV)
+- ✅ AC-OPF integration (using `src/helpers_ac_opf.py`)
+- ✅ Dataset generation (12k samples, 96% success rate)
+- ✅ **Hyperparameter tuning** (batch size optimization, 16 experiments)
+- ✅ Training pipeline (35 epochs, early stopping, batch_size=6)
+- ✅ Model evaluation (R²=98.21% for PG, R²=99.99% for VG)
+- ✅ Probabilistic accuracy metrics (P_PG=38.45%, P_VG=14.80%)
 
 ---
 
@@ -180,8 +189,10 @@ python tests/test_topology_outages.py      # �?N-1 contingencies verified
   - [x] Model architecture (2-head GCNN with physics-informed layers)
   - [x] Feature construction (k=8 iterations)
   - [x] Dataset generation (12k samples, 5 topologies, 50.7% RES penetration)
-  - [x] Training (23 epochs, physics-informed loss, early stopping)
-  - [x] Evaluation (R²=97.65% for power, R²=99.99% for voltage)
+  - [x] **Hyperparameter optimization** (batch size tuning: 16 experiments, optimal=6)
+  - [x] Training (35 epochs, physics-informed loss, early stopping)
+  - [x] Evaluation (R²=98.21% for power, R²=99.99% for voltage)
+  - [x] Probabilistic accuracy metrics (P_PG=38.45%, P_VG=14.80%)
   - [x] Chinese documentation (Week5/Week5.md)
 
 ---
@@ -196,24 +207,36 @@ python tests/test_topology_outages.py      # �?N-1 contingencies verified
 
 ## 🚀 Week 5 Highlights (GCNN-OPF)
 
-### Training Results
+### Training Results (Optimized with Batch Size Tuning)
 - **Model:** 15,026 parameters, NEURONS_FC=128
-- **Training:** 23 epochs, 4.8 minutes, early stopping at epoch 20
-- **Best validation loss:** 0.160208
+- **Optimal Batch Size:** 6 (found via 3-stage tuning across 16 experiments)
+- **Training:** 35 epochs, ~12.7 minutes, early stopping triggered
+- **Best validation loss:** 0.1862
 - **Physics loss weight (κ):** 0.1
 
 ### Test Set Performance (2,000 samples)
 - **Generator Power (PG):**
-  - R² = 0.9765 (97.65% variance explained)
-  - RMSE = 0.153 p.u. �?15.3 MW
-  - MAE = 0.073 p.u. �?7.3 MW
-  - MAPE = 30.20%
+  - R² = 0.9821 (98.21% variance explained)
+  - RMSE = 0.1334 p.u. ≈ 13.3 MW
+  - MAE = 0.0538 p.u. ≈ 5.4 MW
+  - MAPE = 26.32%
+  - **P_PG = 38.45%** (errors < 1 MW threshold)
 
 - **Generator Voltage (VG):**
   - R² = 0.9999 (99.99% variance explained)
-  - RMSE = 0.0077 p.u. �?0.77%
-  - MAE = 0.0060 p.u. �?0.60%
-  - MAPE = 0.68%
+  - RMSE = 0.0086 p.u. ≈ 0.86%
+  - MAE = 0.0059 p.u. ≈ 0.59%
+  - MAPE = 0.56%
+  - **P_VG = 14.80%** (errors < 0.001 p.u. threshold)
+
+### Batch Size Tuning Summary
+Conducted comprehensive 3-stage tuning (16 experiments total):
+- **Optimal:** Batch size 6 (val_loss = 0.1460)
+- **Key finding:** Small batches (2-8) significantly outperform large batches (256-1024) by 2.6-2.8x
+- **Trade-off:** Large batches train 2-3x faster but sacrifice accuracy
+- **Insight:** Physics-constrained GCNN benefits from frequent gradient updates with small batches
+
+See `gcnn_opf_01/docs/gcnn_opf_01.md` for complete tuning results table.
 
 ### Dataset Details
 - **System:** case6ww (6 buses, 3 generators)

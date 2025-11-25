@@ -99,9 +99,14 @@ celerybeat.pid
 .env
 .venv
 
-# GCNN Project Data & Results
+# GCNN Project Data & Results (large generated files)
 gcnn_opf_01/data/
+gcnn_opf_01/data_test/
 gcnn_opf_01/results/
+gcnn_opf_01/lib/
+
+# HTML visualizations
+*.html
 
 env/
 venv/
@@ -148,15 +153,13 @@ Week3/~$*.xlsx
 
 # Outputs directory
 outputs/
-*.html
 
 # Overnight/long-running test results
 overnight_results.txt
 
-# GCNN dataset files (large, generated)
-gcnn_opf_01/data/
-gcnn_opf_01/data_test/
-
 # Test/debug scripts (development only)
 gcnn_opf_01/test_generate_small.py
 tests/verify_opf_output.py
+
+# PDF papers (reference only, not tracked)
+gcnn_opf_01/*.pdf
