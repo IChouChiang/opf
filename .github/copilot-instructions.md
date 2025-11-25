@@ -46,6 +46,7 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
   - `labels_chunk_NNNNNN.npz`: Optimal generator outputs from DCOPF solutions
 - **Model:** PyTorch MLP mapping `P_D` → `P_G` (stored in `Week3/results/`)
 - **Normalization:** `norm_stats.npz` stores mean/std for input/output scaling
+- **Hyperparameters:** Small batch sizes (e.g., 6) found to be optimal for GCNN physics-constrained training (vs standard 32/64).
 
 ## Development Workflows
 

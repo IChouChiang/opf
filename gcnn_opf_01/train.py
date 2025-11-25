@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
+from tqdm import tqdm
 
 # Add gcnn_opf_01 to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -42,7 +43,7 @@ def parse_args():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=10,
+        default=6,
         help="Batch size for training (paper uses 10)",
     )
     parser.add_argument(
@@ -109,7 +110,8 @@ def train_epoch(
     total_phys_loss = 0.0
     n_batches = 0
 
-    for batch_idx, batch in enumerate(train_loader):
+    pbar = tqdm(train_loader, desc="Training", leave=False)
+    for batch_idx, batch in enumerate(pbar):
         # Move to device
         e_0_k = batch["e_0_k"].to(device)  # [B, N_BUS, k]
         f_0_k = batch["f_0_k"].to(device)
@@ -172,6 +174,8 @@ def train_epoch(
         )
         n_batches += 1
 
+        pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+
         if (batch_idx + 1) % log_interval == 0:
             avg_loss = total_loss / n_batches
             avg_sup = total_sup_loss / n_batches
@@ -198,7 +202,7 @@ def validate(model, val_loader, device, A_g2b, kappa=0.1, use_physics=True):
     n_batches = 0
 
     with torch.no_grad():
-        for batch in val_loader:
+        for batch in tqdm(val_loader, desc="Validation", leave=False):
             e_0_k = batch["e_0_k"].to(device)
             f_0_k = batch["f_0_k"].to(device)
             pd = batch["pd"].to(device)

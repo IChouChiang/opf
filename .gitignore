@@ -98,6 +98,11 @@ celerybeat.pid
 # Environments
 .env
 .venv
+
+# GCNN Project Data & Results
+gcnn_opf_01/data/
+gcnn_opf_01/results/
+
 env/
 venv/
 ENV/

@@ -9,7 +9,7 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 **Key Technologies:** Pyomo, PYPOWER/MATPOWER, Gurobi, PyTorch, NumPy
 
 **Environment:** `opf311` (Anaconda)  
-**Current Phase:** Week 5 - GCNN Training & Documentation
+**Current Phase:** Week 5 - GCNN Optimization & Documentation (Batch Size Tuned to 6)
 
 ---
 

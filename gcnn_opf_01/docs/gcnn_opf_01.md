@@ -2,7 +2,7 @@
 
 # GCNN_OPF_01
 
-## Current Status (2025-11-19) - ✅ TRAINING COMPLETED
+## Current Status (2025-11-25) - ✅ OPTIMIZED TRAINING COMPLETED
 
 ### Completed Pipeline:
 - ✅ Model architecture (2-head GCNN)
@@ -10,28 +10,37 @@
 - ✅ Physics-informed loss functions
 - ✅ Dataset generation (12k samples, 96% success rate)
 - ✅ PyTorch Dataset & DataLoader
-- ✅ Training pipeline (23 epochs, early stopping)
-- ✅ Evaluation (R²=97.65% power, R²=99.99% voltage)
+- ✅ Training pipeline (35 epochs, early stopping)
+- ✅ Hyperparameter optimization (Batch Size Tuning)
+- ✅ Evaluation (R²=98.21% power, R²=99.99% voltage)
 - ✅ Week5 Chinese documentation
 
-### Training Results (2025-11-19):
+### Training Results (2025-11-25):
 - **Model:** 15,026 parameters (NEURONS_FC=128)
-- **Training:** 23 epochs, 4.8 minutes, early stopping at epoch 20
-- **Best validation loss:** 0.160208
+- **Training:** 35 epochs, ~12.7 minutes, early stopping triggered
+- **Best validation loss:** 0.1862
+- **Optimal Batch Size:** 6 (found via 3-stage tuning)
 - **Physics loss weight (κ):** 0.1
 
 ### Test Performance (2,000 samples):
 - **Generator Power (PG):**
-  - R² = 0.9765 (97.65% variance explained)
-  - RMSE = 0.153 p.u. ≈ 15.3 MW (100 MVA base)
-  - MAE = 0.073 p.u. ≈ 7.3 MW
-  - MAPE = 30.20%
+  - R² = 0.9821 (98.21% variance explained)
+  - RMSE = 0.1334 p.u. ≈ 13.3 MW (100 MVA base)
+  - MAE = 0.0538 p.u. ≈ 5.4 MW
+  - MAPE = 26.32%
 
 - **Generator Voltage (VG):**
   - R² = 0.9999 (99.99% variance explained)
-  - RMSE = 0.0077 p.u. ≈ 0.77%
-  - MAE = 0.0060 p.u. ≈ 0.60%
-  - MAPE = 0.68%
+  - RMSE = 0.0086 p.u. ≈ 0.86%
+  - MAE = 0.0059 p.u. ≈ 0.59%
+  - MAPE = 0.56%
+
+### Hyperparameter Tuning (Batch Size):
+- **Strategy:** 3-stage coarse-to-fine search.
+- **Round 1 (Coarse):** Tested [16, 32, 64, 128]. Best: 16.
+- **Round 2 (Fine):** Tested [8, 10, 16, 24, 32]. Best: 8.
+- **Round 3 (Very Fine):** Tested [2, 4, 6]. Best: 6.
+- **Conclusion:** Small batch sizes (6) significantly outperform larger ones (64+) for this physics-constrained optimization problem, likely by allowing the optimizer to escape sharp local minima in the loss landscape.
 
 ### Files Present:
   - `config_model_01.py`: Dataclasses-based configs (`ModelConfig`, `TrainingConfig`) with convenience instances and legacy constants retained for compatibility.

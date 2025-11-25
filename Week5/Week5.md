@@ -605,3 +605,19 @@ val_loader = DataLoader(
 - `tests/test_sample_generator.py`: 样本生成器测试
 - `tests/test_topology_outages.py`: N-1 拓扑验证
 
+## to Improve
+
+1. Varying the batch size to see which get the best result. 
+
+2. Fix the number of training samples. Varying the shape of a full connection neural network to find a best shape
+
+   (For the same training  data, what's the gap between a best shape FC model and  GC model).
+
+   - There should be 5 FC models, each of them matches a specific N-1 topology, so these model won't consider any topological physical information like matrix of B or G. 
+   - Their base training data should be the same with the one used when training GC model.   
+
+3. Varying the number of training samples to get a best full connection model (How many training samples needed for a FC model to have the same performance of GC model, or in short, efficiency).
+
+   - Considering edit the parameter used in sample generators and related scripts and avoid repeat calculation to save time.
+
+4. For GC model itself, what's its performance on a unknown N-1 topology?
