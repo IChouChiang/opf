@@ -208,16 +208,20 @@ python tests/test_topology_outages.py      # �?N-1 contingencies verified
 ## 🚀 Week 5 Highlights (GCNN-OPF)
 
 ### Training Results (Optimized with Batch Size Tuning)
-- **Model:** 15,026 parameters, NEURONS_FC=128
-- **Optimal Batch Size:** 6 (found via 3-stage tuning across 16 experiments)
-- **Training:** 35 epochs, ~12.7 minutes, early stopping triggered
-- **Best validation loss:** 0.1862
-- **Physics loss weight (κ):** 0.1
+- **Model:** 1000 neurons (FC layer), Two-Stage Training
+- **Optimal Batch Size:** 24 (found via tuning for larger model)
+- **Training:** 
+  - Phase 1 (Supervised): 25 epochs
+  - Phase 2 (Physics-Informed): 24 epochs
+- **Physics loss weight (κ):** 1.0 (in Phase 2)
 
 ### Test Set Performance (2,000 samples)
 - **Generator Power (PG):**
-  - R² = 0.9821 (98.21% variance explained)
-  - RMSE = 0.1334 p.u. ≈ 13.3 MW
+  - **Probabilistic Accuracy (Error < 1 MW): 98.42%**
+  - R² = 0.9844
+  - RMSE = 0.0069 p.u. (0.69 MW)
+- **Generator Voltage (VG):**
+  - **Probabilistic Accuracy (Error < 0.001 p.u.): 100.00%**
   - MAE = 0.0538 p.u. ≈ 5.4 MW
   - MAPE = 26.32%
   - **P_PG = 38.45%** (errors < 1 MW threshold)
