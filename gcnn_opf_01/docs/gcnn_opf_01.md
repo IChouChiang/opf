@@ -1,8 +1,44 @@
 # GCNN_OPF_01
 
-# GCNN_OPF_01
+## Current Status (2025-11-26) - 🚀 GOAL ACHIEVED (>90% Accuracy)
 
-## Current Status (2025-11-25) - ✅ OPTIMIZED TRAINING COMPLETED
+### Achievement Unlocked:
+- **Probabilistic Accuracy (P_PG):** **98.42%** (Target: >90%)
+- **Voltage Accuracy (P_VG):** **100.00%**
+
+### Key Improvements:
+1.  **Model Capacity:** Increased `neurons_fc` from 128 to **1000**.
+2.  **Training Strategy:** Implemented **Two-Stage Training**:
+    - Phase 1: Supervised Learning (25 epochs, $\kappa=0$)
+    - Phase 2: Physics-Informed Fine-tuning (24 epochs, $\kappa=1.0$)
+3.  **Hyperparameter Tuning:** Found optimal batch size **24** for the larger model.
+
+### Final Evaluation Results (2,000 samples):
+- **Generator Power (PG):**
+  - **P_PG (Error < 0.01 p.u.): 98.42%**
+  - R² = 0.9844
+  - RMSE = 0.0069 p.u. (0.69 MW)
+  - MAE = 0.0026 p.u. (0.26 MW)
+  - MAPE = 0.50%
+
+- **Generator Voltage (VG):**
+  - **P_VG (Error < 0.001 p.u.): 100.00%**
+  - R² = 0.9999
+  - RMSE = 0.00004 p.u.
+  - MAE = 0.00003 p.u.
+
+### Comparison: 128 vs 1000 Neurons
+Both models achieve the project goal (>90% accuracy) when evaluated correctly with denormalization. However, the 1000-neuron model provides superior precision.
+
+| Metric | 128 Neurons (Baseline) | 1000 Neurons (Final) | Improvement |
+| :--- | :--- | :--- | :--- |
+| **Optimal Batch Size** | 6 | 24 | Larger batch stability |
+| **Probabilistic Acc ($P_{PG}$)** | 96.73% | **98.42%** | +1.69% |
+| **Voltage Acc ($P_{VG}$)** | 99.98% | **100.00%** | +0.02% |
+| **MAE (Power)** | 0.0031 p.u. | **0.0026 p.u.** | -16% Error |
+| **R² Score** | 0.9821 | **0.9844** | +0.0023 |
+
+---
 
 ### Completed Pipeline:
 - ✅ Model architecture (2-head GCNN)

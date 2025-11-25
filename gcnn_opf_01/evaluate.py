@@ -97,10 +97,10 @@ def compute_metrics(predictions, labels):
     # Note: If baseMVA=100, 1MW = 0.01 p.u.; adjust if needed
     thr_pg = 0.01  # 1 MW in p.u. (assuming baseMVA=100)
     thr_vg = 0.001  # 0.001 p.u. for voltage
-    
+
     error_pg = np.abs(pg_pred - pg_label)
     error_vg = np.abs(vg_pred - vg_label)
-    
+
     p_pg = np.mean(error_pg < thr_pg) * 100  # Percentage
     p_vg = np.mean(error_vg < thr_vg) * 100  # Percentage
 
@@ -194,12 +194,20 @@ def main():
         pin_memory=True if device.type == "cuda" else False,
     )
 
-    # Load model
-    print(f"\nLoading model from: {args.model_path}")
-    model = GCNN_OPF_01().to(device)
+    # Initialize model
+    model = GCNN_OPF_01()
 
+    # Load model weights
+    print(f"Loading model from: {args.model_path}")
     checkpoint = torch.load(args.model_path, map_location=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
+
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
+
+    model.to(device)
+    model.eval()
 
     print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
 
@@ -209,6 +217,25 @@ def main():
 
     print(f"Predictions shape: {predictions.shape}")
     print(f"Labels shape: {labels.shape}")
+
+    # Denormalize if needed
+    if test_dataset.norm_stats is not None:
+        print("\nDenormalizing predictions and labels...")
+        stats = test_dataset.norm_stats
+
+        # Extract stats as numpy arrays
+        pg_mean = stats["pg_mean"].numpy()
+        pg_std = stats["pg_std"].numpy()
+        vg_mean = stats["vg_mean"].numpy()
+        vg_std = stats["vg_std"].numpy()
+
+        # Denormalize PG (index 0)
+        predictions[:, :, 0] = predictions[:, :, 0] * (pg_std + 1e-8) + pg_mean
+        labels[:, :, 0] = labels[:, :, 0] * (pg_std + 1e-8) + pg_mean
+
+        # Denormalize VG (index 1)
+        predictions[:, :, 1] = predictions[:, :, 1] * (vg_std + 1e-8) + vg_mean
+        labels[:, :, 1] = labels[:, :, 1] * (vg_std + 1e-8) + vg_mean
 
     # Compute metrics
     metrics = compute_metrics(predictions, labels)
