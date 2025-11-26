@@ -167,3 +167,8 @@ gcnn_opf_01/*.pdf
 # Hasan DNN Project (M8)
 dnn_opf_02/data/
 dnn_opf_02/results/
+
+# DeepOPF-FT Baseline (dnn_opf_03)
+dnn_opf_03/data/
+dnn_opf_03/results/
+dnn_opf_03/*.pdf
