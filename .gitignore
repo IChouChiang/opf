@@ -163,3 +163,7 @@ tests/verify_opf_output.py
 
 # PDF papers (reference only, not tracked)
 gcnn_opf_01/*.pdf
+
+# Hasan DNN Project (M8)
+dnn_opf_02/data/
+dnn_opf_02/results/
