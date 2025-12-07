@@ -46,6 +46,15 @@ def parse_args():
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Device to use",
     )
+    parser.add_argument(
+        "--hidden_dim", type=int, default=None, help="Override hidden dimension"
+    )
+    parser.add_argument(
+        "--n_hidden_layers",
+        type=int,
+        default=None,
+        help="Override number of hidden layers",
+    )
     return parser.parse_args()
 
 
@@ -198,6 +207,16 @@ def main():
 
     # Initialize model
     config = ModelConfig()
+
+    # Apply overrides
+    if args.hidden_dim is not None:
+        config.hidden_dim = args.hidden_dim
+        print(f"Overriding hidden_dim: {config.hidden_dim}")
+
+    if args.n_hidden_layers is not None:
+        config.n_hidden_layers = args.n_hidden_layers
+        print(f"Overriding n_hidden_layers: {config.n_hidden_layers}")
+
     model = AdmittanceDNN(config)
 
     # Load model weights

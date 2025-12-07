@@ -102,8 +102,19 @@ def parse_args():
     parser.add_argument(
         "--phase2_kappa",
         type=float,
-        default=1.0,
+        default=0.1,
         help="Physics loss weight for Phase 2",
+    )
+
+    # Model architecture overrides
+    parser.add_argument(
+        "--hidden_dim", type=int, default=None, help="Override hidden dimension"
+    )
+    parser.add_argument(
+        "--n_hidden_layers",
+        type=int,
+        default=None,
+        help="Override number of hidden layers",
     )
 
     # Logging
@@ -416,6 +427,16 @@ def main():
 
     # Create model
     config = ModelConfig()
+
+    # Apply overrides
+    if args.hidden_dim is not None:
+        config.hidden_dim = args.hidden_dim
+        print(f"Overriding hidden_dim: {config.hidden_dim}")
+
+    if args.n_hidden_layers is not None:
+        config.n_hidden_layers = args.n_hidden_layers
+        print(f"Overriding n_hidden_layers: {config.n_hidden_layers}")
+
     model = AdmittanceDNN(config).to(device)
     print(
         f"\nModel created with {sum(p.numel() for p in model.parameters())} parameters"
