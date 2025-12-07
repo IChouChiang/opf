@@ -277,10 +277,10 @@ export default function Home() {
           nodeRelSize={6}
           
           // Link Styling
-          linkColor={(link: any) => cutBranches.has(link.id) ? '#ff0000' : '#999'}
-          linkWidth={(link: any) => cutBranches.has(link.id) ? 2 : 1}
-          linkLineDash={(link: any) => cutBranches.has(link.id) ? [5, 5] : null}
-          linkDirectionalParticles={(link: any) => cutBranches.has(link.id) ? 0 : 2}
+          linkColor={useCallback((link: any) => cutBranches.has(link.id) ? '#ff0000' : '#999', [cutBranches])}
+          linkWidth={useCallback((link: any) => cutBranches.has(link.id) ? 2 : 1, [cutBranches])}
+          linkLineDash={useCallback((link: any) => cutBranches.has(link.id) ? [5, 5] : null, [cutBranches])}
+          linkDirectionalParticles={useCallback((link: any) => cutBranches.has(link.id) ? 0 : 2, [cutBranches])}
           linkDirectionalParticleSpeed={0.005}
           
           // Interaction
