@@ -4,8 +4,6 @@ Modules
 -------
 ac_opf_create : AC-OPF Pyomo AbstractModel (Cartesian voltage formulation)
 helpers_ac_opf : Shared AC-OPF helpers (data prep, initialization, solve wrapper)
-topology_viz : Static network topology visualization with matplotlib/networkx
-interactive_viz : Interactive network visualization with PyVis
 """
 
 __version__ = "0.1.0"
@@ -13,6 +11,4 @@ __version__ = "0.1.0"
 __all__ = [
     "ac_opf_create",
     "helpers_ac_opf",
-    "topology_viz",
-    "interactive_viz",
 ]

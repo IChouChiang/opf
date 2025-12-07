@@ -41,9 +41,7 @@ opf/
 │   └── tune_batch_size.py           # Hyperparameter tuning (with caching)
 ├── src/                # Reusable modules
 │   ├── ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
-│   ├── helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
-│   ├── topology_viz.py        # Static network visualization
-│   └── interactive_viz.py     # Interactive visualization (PyVis)
+│   └── helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
 ├── tests/              # Test harnesses and baselines
 │   ├── test_case39.py         # IEEE 39-bus AC-OPF
 │   ├── test_case57.py         # IEEE 57-bus AC-OPF
