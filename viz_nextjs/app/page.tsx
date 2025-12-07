@@ -33,6 +33,7 @@ interface GraphData {
 }
 
 export default function Home() {
+  const [selectedCase, setSelectedCase] = useState<string>('case14');
   const [rawData, setRawData] = useState<GraphData | null>(null);
   const [cutBranches, setCutBranches] = useState<Set<number>>(new Set());
   const [targetCutCount, setTargetCutCount] = useState<number>(1);
@@ -41,7 +42,10 @@ export default function Home() {
 
   // Load Data
   useEffect(() => {
-    fetch('/data/case6ww.json')
+    setRawData(null); // Clear previous data while loading
+    setCutBranches(new Set()); // Reset cuts when case changes
+    
+    fetch(`/data/${selectedCase}.json`)
       .then(res => res.json())
       .then(data => {
         // Process nodes for visualization
@@ -51,8 +55,9 @@ export default function Home() {
           color: n.type === 'Slack' ? '#ef4444' : n.type === 'PV' ? '#22c55e' : '#3b82f6'
         }));
         setRawData({ nodes, edges: data.edges });
-      });
-  }, []);
+      })
+      .catch(err => console.error("Failed to load case data:", err));
+  }, [selectedCase]);
 
   // Toggle Branch Cut
   const handleLinkClick = useCallback((link: any) => {
@@ -143,6 +148,20 @@ export default function Home() {
 
         <div className="p-6 flex-1 overflow-y-auto space-y-8">
           
+          {/* Case Selection */}
+          <section>
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Select Case</h2>
+            <select 
+              value={selectedCase}
+              onChange={(e) => setSelectedCase(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+            >
+              <option value="case6ww">Case 6ww (Wood & Wollenberg)</option>
+              <option value="case9">Case 9 (IEEE 9-Bus)</option>
+              <option value="case14">Case 14 (IEEE 14-Bus)</option>
+            </select>
+          </section>
+
           {/* Settings Section */}
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Settings</h2>

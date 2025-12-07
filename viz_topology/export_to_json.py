@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Add src to path to import pypower if needed, though pypower is installed in env
 # But we need to import the specific case files if they are local, or use pypower.api
-from pypower.api import case6ww, case9, case39, case57
+from pypower.api import case6ww, case9, case39, case57, case14
 
 def export_case_to_json(ppc, name, output_dir):
     """
@@ -105,6 +105,7 @@ def main():
     # Export cases
     export_case_to_json(case6ww(), "case6ww", output_dir)
     export_case_to_json(case9(), "case9", output_dir)
+    export_case_to_json(case14(), "case14", output_dir)
     # export_case_to_json(case39(), "case39", output_dir) # Optional
     
 if __name__ == "__main__":
