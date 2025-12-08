@@ -1,4 +1,4 @@
-"""Configuration for GCNN OPF Model 01."""
+"""Configuration for GCNN OPF Model 01 (Light Version)."""
 
 from dataclasses import dataclass
 
@@ -12,8 +12,8 @@ class ModelConfig:
     channels_gc_in: int = (
         8  # k=8 feature construction iterations (e^0...e^7, f^0...f^7)
     )
-    channels_gc_out: int = 8  # graph conv output channels
-    neurons_fc: int = 1000  # neurons per FC layer
+    channels_gc_out: int = 6  # graph conv output channels (Reduced from 8)
+    neurons_fc: int = 512  # neurons per FC layer (Reduced from 1000)
     n_gc_layers: int = 2  # number of graph conv layers (gc1, gc2)
     n_fc_layers: int = 1  # number of fully connected layers (fc1)
     activation_gs: str = "tanh"  # activation function for GC layers

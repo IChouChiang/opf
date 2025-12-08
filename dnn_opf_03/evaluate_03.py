@@ -32,6 +32,12 @@ def parse_args():
         help="Directory containing test data",
     )
     parser.add_argument(
+        "--test_file",
+        type=str,
+        default="samples_test.npz",
+        help="Name of the test file in data_dir",
+    )
+    parser.add_argument(
         "--norm_stats_path",
         type=str,
         default=None,
@@ -188,7 +194,7 @@ def main():
     print(f"Using normalization stats from: {norm_stats_path}")
 
     test_dataset = OPFDataset03(
-        data_path=data_dir / "samples_test.npz",
+        data_path=data_dir / args.test_file,
         topo_operators_path=data_dir / "topology_operators.npz",
         norm_stats_path=norm_stats_path,
         normalize=True,

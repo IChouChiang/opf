@@ -1,4 +1,4 @@
-"""Configuration for DeepOPF-FT Model 03 (Baseline)."""
+"""Configuration for DeepOPF-FT Model 03 (128 Neurons)."""
 
 from dataclasses import dataclass
 
@@ -14,8 +14,8 @@ class ModelConfig:
     # For Case6ww: 12 + 72 = 84
     input_dim: int = 84
 
-    hidden_dim: int = 1000
-    n_hidden_layers: int = 3
+    hidden_dim: int = 128  # Reduced from 1000 to match ~46k params
+    n_hidden_layers: int = 3  # Number of hidden layers (excluding input/output)
     activation: str = "relu"
 
 
