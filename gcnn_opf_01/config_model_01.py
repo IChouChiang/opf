@@ -48,8 +48,14 @@ class TrainingConfig:
     optimizer: str = "adam"
     batch_size: int = 6
     learning_rate: float = 0.001
+    weight_decay: float = 1e-5
     epochs: int = 50
     early_stopping_patience: int = 5
+    kappa: float = 0.1
+    use_physics_loss: bool = True
+    two_stage: bool = False
+    phase1_epochs: int = 25
+    phase2_epochs: int = 25
 
     @classmethod
     def from_json(cls, json_path):
