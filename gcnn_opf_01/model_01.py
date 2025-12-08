@@ -1,12 +1,6 @@
 import torch
 import torch.nn as nn
-from config_model_01 import (
-    N_BUS,
-    N_GEN,
-    NEURONS_FC,
-    CHANNELS_GC_IN,
-    CHANNELS_GC_OUT,
-)
+from config_model_01 import ModelConfig
 
 
 class GraphConv(nn.Module):
@@ -221,22 +215,23 @@ class GCNN_OPF_01(nn.Module):
           * v_head   → [N_BUS, 2] (e, f) for physics/correlative losses
     """
 
-    def __init__(self):
+    def __init__(self, config: ModelConfig):
         super().__init__()
+        self.config = config
 
         # GraphConv stack (2 layers for case6ww per paper guidance)
-        self.gc1 = GraphConv(CHANNELS_GC_IN, CHANNELS_GC_OUT)
-        self.gc2 = GraphConv(CHANNELS_GC_OUT, CHANNELS_GC_OUT)
+        self.gc1 = GraphConv(config.channels_gc_in, config.channels_gc_out)
+        self.gc2 = GraphConv(config.channels_gc_out, config.channels_gc_out)
 
         # Flatten concatenated e,f features
-        flat_dim = N_BUS * 2 * CHANNELS_GC_OUT
+        flat_dim = config.n_bus * 2 * config.channels_gc_out
 
         self.act_fc = nn.ReLU()
-        self.fc1 = nn.Linear(flat_dim, NEURONS_FC)  # shared trunk
+        self.fc1 = nn.Linear(flat_dim, config.neurons_fc)  # shared trunk
 
         # Heads
-        self.fc_gen = nn.Linear(NEURONS_FC, N_GEN * 2)  # (PG, VG)
-        self.fc_v = nn.Linear(NEURONS_FC, N_BUS * 2)  # (e, f)
+        self.fc_gen = nn.Linear(config.neurons_fc, config.n_gen * 2)  # (PG, VG)
+        self.fc_v = nn.Linear(config.neurons_fc, config.n_bus * 2)  # (e, f)
 
     def forward(
         self,
@@ -289,8 +284,8 @@ class GCNN_OPF_01(nn.Module):
         gen_flat = self.fc_gen(h_fc1)  # [B, N_GEN*2]
         v_flat = self.fc_v(h_fc1)  # [B, N_BUS*2]
 
-        gen_out = gen_flat.view(B, N_GEN, 2)  # [B, N_GEN, 2]
-        v_out = v_flat.view(B, N_BUS, 2)  # [B, N_BUS, 2]
+        gen_out = gen_flat.view(B, self.config.n_gen, 2)  # [B, N_GEN, 2]
+        v_out = v_flat.view(B, self.config.n_bus, 2)  # [B, N_BUS, 2]
 
         # Remove batch dimension if input was unbatched
         if not batched:

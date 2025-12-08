@@ -2,7 +2,7 @@
 Evaluate trained GCNN model on test dataset.
 
 Usage:
-    python gcnn_opf_01/evaluate.py --model_path gcnn_opf_01/results/best_model.pth
+    python gcnn_opf_01/evaluate.py --config gcnn_opf_01/configs/base.json --model_path gcnn_opf_01/results/best_model.pth
 """
 
 import argparse
@@ -14,11 +14,17 @@ from torch.utils.data import DataLoader
 
 from dataset import OPFDataset
 from model_01 import GCNN_OPF_01
-from config_model_01 import ModelConfig
+from config_model_01 import load_config
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate GCNN OPF model")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="gcnn_opf_01/configs/base.json",
+        help="Path to JSON configuration file",
+    )
     parser.add_argument(
         "--model_path",
         type=str,
@@ -176,19 +182,15 @@ def evaluate_model(model, test_loader, device):
 def main():
     args = parse_args()
 
-    print("=" * 80)
-    print("GCNN OPF MODEL EVALUATION")
-    print("=" * 80)
+    # Load configuration
+    print(f"Loading configuration from {args.config}")
+    model_config, _ = load_config(args.config)
 
-    # Setup device
     device = torch.device(args.device)
-    print(f"\nUsing device: {device}")
+    print(f"Using device: {device}")
 
-    # Load test dataset
+    # Load data
     data_dir = Path(args.data_dir)
-    print(f"\nLoading test dataset from: {data_dir}")
-
-    # Determine norm stats path
     norm_stats_path = (
         Path(args.norm_stats_path)
         if args.norm_stats_path
@@ -202,6 +204,7 @@ def main():
         norm_stats_path=norm_stats_path,
         normalize=True,
         split="test",
+        feature_iterations=model_config.feature_iterations,
     )
 
     print(f"Test samples: {len(test_dataset)}")
@@ -215,7 +218,7 @@ def main():
     )
 
     # Initialize model
-    model = GCNN_OPF_01()
+    model = GCNN_OPF_01(config=model_config)
 
     # Load model weights
     print(f"Loading model from: {args.model_path}")
@@ -290,8 +293,7 @@ def main():
 
     # Per-generator statistics
     print("\n--- Per-Generator Statistics (PG) ---")
-    config = ModelConfig()
-    for g in range(config.n_gen):
+    for g in range(model_config.n_gen):
         pg_pred_g = predictions[:, g, 0]
         pg_label_g = labels[:, g, 0]
 

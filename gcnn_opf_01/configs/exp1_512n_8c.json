@@ -1,0 +1,19 @@
+{
+    "model": {
+        "n_bus": 6,
+        "n_gen": 3,
+        "feature_iterations": 8,
+        "channels_gc_out": 8,
+        "neurons_fc": 512,
+        "n_gc_layers": 2,
+        "n_fc_layers": 1,
+        "activation_gs": "tanh"
+    },
+    "training": {
+        "optimizer": "adam",
+        "batch_size": 6,
+        "learning_rate": 0.001,
+        "epochs": 50,
+        "early_stopping_patience": 5
+    }
+}

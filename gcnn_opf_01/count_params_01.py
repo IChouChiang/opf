@@ -1,3 +1,10 @@
+"""
+Count parameters of GCNN OPF model based on configuration.
+
+Usage:
+    python gcnn_opf_01/count_params_01.py --config gcnn_opf_01/configs/base.json
+"""
+
 import torch
 import sys
 import os
@@ -7,8 +14,9 @@ import pandas as pd
 # Add current directory to path so imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+import argparse
 from model_01 import GCNN_OPF_01
-from config_model_01 import ModelConfig
+from config_model_01 import load_config
 
 
 def count_parameters(model):
@@ -53,11 +61,24 @@ def count_parameters(model):
 
 
 def main():
-    print("Initializing GCNN_OPF_01 with current config...")
-    config = ModelConfig()
-    print(f"Config: Neurons={config.neurons_fc}, GC_Out={config.channels_gc_out}")
+    parser = argparse.ArgumentParser(description="Count parameters of GCNN OPF model")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="gcnn_opf_01/configs/base.json",
+        help="Path to JSON configuration file",
+    )
+    args = parser.parse_args()
 
-    model = GCNN_OPF_01()
+    print(f"Loading configuration from {args.config}")
+    model_config, _ = load_config(args.config)
+
+    print("Initializing GCNN_OPF_01 with loaded config...")
+    print(
+        f"Config: Neurons={model_config.neurons_fc}, GC_Out={model_config.channels_gc_out}, GC_In={model_config.channels_gc_in}"
+    )
+
+    model = GCNN_OPF_01(config=model_config)
     count_parameters(model)
 
 

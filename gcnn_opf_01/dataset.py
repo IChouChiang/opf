@@ -26,6 +26,7 @@ class OPFDataset(Dataset):
         norm_stats_path=None,
         normalize: bool = True,
         split: str = "train",
+        feature_iterations: int = None,
     ):
         """
         Args:
@@ -34,6 +35,7 @@ class OPFDataset(Dataset):
             norm_stats_path: Path to norm_stats.npz (optional)
             normalize: Whether to apply z-score normalization
             split: 'train' or 'test'
+            feature_iterations: Number of feature iterations to use (slices input features)
         """
         self.split = split
         self.normalize = normalize
@@ -48,6 +50,16 @@ class OPFDataset(Dataset):
         # Features: [N, N_BUS, k]
         self.e_0_k = torch.from_numpy(data["e_0_k"]).float()
         self.f_0_k = torch.from_numpy(data["f_0_k"]).float()
+
+        # Slice features if feature_iterations is specified
+        if feature_iterations is not None:
+            k_avail = self.e_0_k.shape[2]
+            if feature_iterations > k_avail:
+                raise ValueError(
+                    f"Requested {feature_iterations} iterations but dataset only has {k_avail}"
+                )
+            self.e_0_k = self.e_0_k[:, :, :feature_iterations]
+            self.f_0_k = self.f_0_k[:, :, :feature_iterations]
 
         # Demands: [N, N_BUS]
         self.pd = torch.from_numpy(data["pd"]).float()

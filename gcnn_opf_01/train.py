@@ -1,4 +1,9 @@
-"""Training script for GCNN OPF Model 01."""
+"""
+Training script for GCNN OPF Model 01.
+
+Usage:
+    python gcnn_opf_01/train.py --config gcnn_opf_01/configs/base.json
+"""
 
 import sys
 from pathlib import Path
@@ -19,11 +24,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 from model_01 import GCNN_OPF_01
 from loss_model_01 import correlative_loss_pg
 from dataset import OPFDataset
-from config_model_01 import ModelConfig, TrainingConfig
+from config_model_01 import load_config
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train GCNN OPF Model")
+
+    # Config path
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="gcnn_opf_01/configs/base.json",
+        help="Path to JSON configuration file",
+    )
 
     # Data paths
     parser.add_argument(
@@ -368,6 +381,20 @@ def validate(model, val_loader, device, A_g2b, kappa=0.1, use_physics=True):
 def main():
     args = parse_args()
 
+    # Load configuration
+    print(f"Loading configuration from {args.config}")
+    model_config, training_config = load_config(args.config)
+
+    # Override args with config values
+    args.batch_size = training_config.batch_size
+    args.lr = training_config.learning_rate
+    args.weight_decay = training_config.weight_decay
+    args.epochs = training_config.epochs
+    args.patience = training_config.early_stopping_patience
+    args.kappa = training_config.kappa
+    args.use_physics_loss = training_config.use_physics_loss
+    args.two_stage = training_config.two_stage
+
     # Create results directory
     results_dir = Path(args.results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -385,6 +412,7 @@ def main():
         norm_stats_path=data_dir / "norm_stats.npz",
         normalize=True,
         split="train",
+        feature_iterations=model_config.feature_iterations,
     )
 
     val_dataset = OPFDataset(
@@ -393,6 +421,7 @@ def main():
         norm_stats_path=data_dir / "norm_stats.npz",
         normalize=True,
         split="test",
+        feature_iterations=model_config.feature_iterations,
     )
 
     print(f"Train samples: {len(train_dataset)}")
@@ -416,16 +445,15 @@ def main():
     )
 
     # Create model
-    config = ModelConfig()
-    model = GCNN_OPF_01().to(device)
+    model = GCNN_OPF_01(config=model_config).to(device)
     print(
         f"\nModel created with {sum(p.numel() for p in model.parameters())} parameters"
     )
 
     # Load generator bus mapping for physics loss
     gen_bus_map = train_dataset.gen_bus_map.numpy()
-    N_BUS = config.n_bus
-    N_GEN = config.n_gen
+    N_BUS = model_config.n_bus
+    N_GEN = model_config.n_gen
 
     A_g2b = np.zeros((N_BUS, N_GEN), dtype=np.float32)
     for g in range(N_GEN):

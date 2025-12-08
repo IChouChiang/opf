@@ -1,5 +1,17 @@
 # GCNN_OPF_01
 
+## Configuration System Update (2025-12-08)
+The project has been refactored to use JSON-based configuration files located in `gcnn_opf_01/configs/`. This allows for flexible experimentation with different architectures (e.g., varying `neurons_fc`, `feature_iterations`, `channels_gc_out`).
+
+**Usage:**
+```bash
+# Training
+python gcnn_opf_01/train.py --config gcnn_opf_01/configs/exp1_256n_8c.json
+
+# Evaluation
+python gcnn_opf_01/evaluate.py --config gcnn_opf_01/configs/exp1_256n_8c.json --model_path <path_to_model>
+```
+
 ## Current Status (2025-11-26) - 🚀 GOAL ACHIEVED (>90% Accuracy)
 
 ### Achievement Unlocked:
@@ -322,14 +334,36 @@ The `evaluate.py` script supports evaluating on both seen and unseen datasets.
 
 ```bash
 # Basic usage (Seen Data)
-python gcnn_opf_01/evaluate.py --model_path <path_to_model> --data_dir gcnn_opf_01/data
+python gcnn_opf_01/evaluate.py --config gcnn_opf_01/configs/base.json --model_path <path_to_model> --data_dir gcnn_opf_01/data
 
 # Advanced usage (Unseen Data / Custom Test File)
 # --test_file: Specify filename if different from samples_test.npz
 # --norm_stats_path: Use training stats for normalization
 python gcnn_opf_01/evaluate.py \
+    --config gcnn_opf_01/configs/base.json \
     --model_path <path_to_model> \
     --data_dir gcnn_opf_01/data_unseen \
     --test_file samples_test.npz \
     --norm_stats_path gcnn_opf_01/data/norm_stats.npz
 ```
+
+## Appendix B: Evaluation of Light v3 (256n) on Unseen Data (2025-12-08)
+
+**Model:** Light v3 (256 neurons, 8 channels, 2-phase training)
+**Dataset:** Unseen Data (`gcnn_opf_01/data_unseen`)
+
+**Results:**
+- **Generator Power (PG):**
+  - **P_PG (Error < 0.01 p.u.): 40.44%**
+  - R² = -0.4844 (Poor generalization for dispatch)
+  - RMSE = 0.0683 p.u. (6.83 MW)
+  - MAPE = 8.92%
+
+- **Generator Voltage (VG):**
+  - **P_VG (Error < 0.001 p.u.): 94.03%**
+  - R² = 0.9960 (Excellent generalization for voltage)
+  - RMSE = 0.0006 p.u.
+  - MAPE = 0.03%
+
+**Analysis:**
+Similar to previous findings, the model generalizes well for voltage setpoints (94% accuracy) but struggles with active power dispatch on unseen topologies (40% accuracy). This confirms the need for N-k training or using the model as a warm-start initializer.
