@@ -227,6 +227,7 @@ class GCNN_OPF_01(nn.Module):
         flat_dim = config.n_bus * 2 * config.channels_gc_out
 
         self.act_fc = nn.ReLU()
+        self.dropout = nn.Dropout(config.dropout)
         self.fc1 = nn.Linear(flat_dim, config.neurons_fc)  # shared trunk
 
         # Heads
@@ -279,6 +280,7 @@ class GCNN_OPF_01(nn.Module):
 
         # FC layers (process each sample in batch)
         h_fc1 = self.act_fc(self.fc1(h_flat))  # [B, NEURONS_FC]
+        h_fc1 = self.dropout(h_fc1)
 
         # Heads
         gen_flat = self.fc_gen(h_fc1)  # [B, N_GEN*2]

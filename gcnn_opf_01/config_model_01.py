@@ -18,6 +18,7 @@ class ModelConfig:
     n_gc_layers: int = 2  # number of graph conv layers (gc1, gc2)
     n_fc_layers: int = 1  # number of fully connected layers (fc1)
     activation_gs: str = "tanh"  # activation function for GC layers
+    dropout: float = 0.0  # dropout probability
 
     @classmethod
     def from_json(cls, json_path):
