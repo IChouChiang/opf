@@ -315,3 +315,21 @@ To evaluate the model's ability to generalize to unseen topologies, a "Zero-Shot
 The model demonstrates **excellent generalization for voltage setpoints (VG)** even on unseen topologies, maintaining >90% accuracy. However, **active power dispatch (PG) generalization is poor** (44% accuracy, negative R²). This indicates that the mapping from topology/load to optimal power dispatch is highly non-linear and topology-dependent, requiring either:
 1.  Training on a wider variety of N-1 contingencies (N-k training).
 2.  Using the GCNN as a warm-start for a traditional solver rather than a direct replacement for unseen topologies.
+
+## Evaluation Script Usage
+
+The `evaluate.py` script supports evaluating on both seen and unseen datasets.
+
+```bash
+# Basic usage (Seen Data)
+python gcnn_opf_01/evaluate.py --model_path <path_to_model> --data_dir gcnn_opf_01/data
+
+# Advanced usage (Unseen Data / Custom Test File)
+# --test_file: Specify filename if different from samples_test.npz
+# --norm_stats_path: Use training stats for normalization
+python gcnn_opf_01/evaluate.py \
+    --model_path <path_to_model> \
+    --data_dir gcnn_opf_01/data_unseen \
+    --test_file samples_test.npz \
+    --norm_stats_path gcnn_opf_01/data/norm_stats.npz
+```

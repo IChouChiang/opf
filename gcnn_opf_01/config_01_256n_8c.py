@@ -1,4 +1,4 @@
-"""Configuration for GCNN OPF Model 01."""
+"""Configuration for GCNN OPF Model 01 (256 neurons, 8 channels)."""
 
 from dataclasses import dataclass
 
