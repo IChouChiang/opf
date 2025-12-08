@@ -25,6 +25,14 @@ from config_03 import ModelConfig, TrainingConfig
 def parse_args():
     parser = argparse.ArgumentParser(description="Train GCNN OPF Model")
 
+    # Config file
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to JSON configuration file (overrides other args)",
+    )
+
     # Data paths
     parser.add_argument(
         "--data_dir",
@@ -386,6 +394,28 @@ def main():
     device = torch.device(args.device)
     print(f"Using device: {device}")
 
+    # Load config
+    if args.config:
+        print(f"Loading configuration from {args.config}")
+        model_config = ModelConfig.from_json(args.config)
+        train_config = TrainingConfig.from_json(args.config)
+
+        # Override args with config values if present
+        args.batch_size = train_config.batch_size
+        args.epochs = train_config.epochs
+        args.lr = train_config.lr
+        args.weight_decay = train_config.weight_decay
+    else:
+        model_config = ModelConfig()
+        # Apply overrides
+        if args.hidden_dim is not None:
+            model_config.hidden_dim = args.hidden_dim
+            print(f"Overriding hidden_dim: {model_config.hidden_dim}")
+
+        if args.n_hidden_layers is not None:
+            model_config.n_hidden_layers = args.n_hidden_layers
+            print(f"Overriding n_hidden_layers: {model_config.n_hidden_layers}")
+
     # Load datasets
     data_dir = Path(args.data_dir)
     print("Loading datasets...")
@@ -425,27 +455,15 @@ def main():
         pin_memory=True if device.type == "cuda" else False,
     )
 
-    # Create model
-    config = ModelConfig()
-
-    # Apply overrides
-    if args.hidden_dim is not None:
-        config.hidden_dim = args.hidden_dim
-        print(f"Overriding hidden_dim: {config.hidden_dim}")
-
-    if args.n_hidden_layers is not None:
-        config.n_hidden_layers = args.n_hidden_layers
-        print(f"Overriding n_hidden_layers: {config.n_hidden_layers}")
-
-    model = AdmittanceDNN(config).to(device)
+    model = AdmittanceDNN(model_config).to(device)
     print(
         f"\nModel created with {sum(p.numel() for p in model.parameters())} parameters"
     )
 
     # Load generator bus mapping for physics loss
     gen_bus_map = train_dataset.gen_bus_map.numpy()
-    N_BUS = config.n_bus
-    N_GEN = config.n_gen
+    N_BUS = model_config.n_bus
+    N_GEN = model_config.n_gen
 
     A_g2b = np.zeros((N_BUS, N_GEN), dtype=np.float32)
     for g in range(N_GEN):

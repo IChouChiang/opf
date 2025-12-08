@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 from dataset import OPFDataset
 from model_01 import GCNN_OPF_01
+from model_nodewise import GCNN_OPF_NodeWise
 from config_model_01 import load_config
 
 
@@ -218,7 +219,11 @@ def main():
     )
 
     # Initialize model
-    model = GCNN_OPF_01(config=model_config)
+    print(f"Initializing model ({model_config.model_type})...")
+    if model_config.model_type == "nodewise":
+        model = GCNN_OPF_NodeWise(config=model_config)
+    else:
+        model = GCNN_OPF_01(config=model_config)
 
     # Load model weights
     print(f"Loading model from: {args.model_path}")

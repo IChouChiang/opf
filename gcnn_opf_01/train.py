@@ -22,6 +22,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent))
 
 from model_01 import GCNN_OPF_01
+from model_nodewise import GCNN_OPF_NodeWise
 from loss_model_01 import correlative_loss_pg
 from dataset import OPFDataset
 from config_model_01 import load_config
@@ -445,7 +446,12 @@ def main():
     )
 
     # Create model
-    model = GCNN_OPF_01(config=model_config).to(device)
+    print(f"Initializing model ({model_config.model_type})...")
+    if model_config.model_type == "nodewise":
+        model = GCNN_OPF_NodeWise(config=model_config).to(device)
+    else:
+        model = GCNN_OPF_01(config=model_config).to(device)
+
     print(
         f"\nModel created with {sum(p.numel() for p in model.parameters())} parameters"
     )

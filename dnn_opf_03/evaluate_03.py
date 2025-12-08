@@ -20,6 +20,12 @@ from config_03 import ModelConfig
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate DeepOPF-FT Baseline")
     parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to JSON configuration file (overrides other args)",
+    )
+    parser.add_argument(
         "--model_path",
         type=str,
         default="dnn_opf_03/results/best_model.pth",
@@ -212,16 +218,19 @@ def main():
     )
 
     # Initialize model
-    config = ModelConfig()
+    if args.config:
+        print(f"Loading configuration from {args.config}")
+        config = ModelConfig.from_json(args.config)
+    else:
+        config = ModelConfig()
+        # Apply overrides
+        if args.hidden_dim is not None:
+            config.hidden_dim = args.hidden_dim
+            print(f"Overriding hidden_dim: {config.hidden_dim}")
 
-    # Apply overrides
-    if args.hidden_dim is not None:
-        config.hidden_dim = args.hidden_dim
-        print(f"Overriding hidden_dim: {config.hidden_dim}")
-
-    if args.n_hidden_layers is not None:
-        config.n_hidden_layers = args.n_hidden_layers
-        print(f"Overriding n_hidden_layers: {config.n_hidden_layers}")
+        if args.n_hidden_layers is not None:
+            config.n_hidden_layers = args.n_hidden_layers
+            print(f"Overriding n_hidden_layers: {config.n_hidden_layers}")
 
     model = AdmittanceDNN(config)
 

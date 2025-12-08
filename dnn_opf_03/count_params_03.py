@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import argparse
 import torch
 from prettytable import PrettyTable
 
@@ -25,7 +26,15 @@ def count_parameters(model):
 
 
 def main():
-    config = ModelConfig()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default=None, help="Path to JSON config")
+    args = parser.parse_args()
+
+    if args.config:
+        config = ModelConfig.from_json(args.config)
+    else:
+        config = ModelConfig()
+
     model = AdmittanceDNN(config)
     print(f"Model Configuration:")
     print(f"  Hidden Dim: {config.hidden_dim}")

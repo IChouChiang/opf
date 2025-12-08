@@ -1,0 +1,16 @@
+{
+    "model": {
+        "hidden_dim": 89,
+        "n_hidden_layers": 2,
+        "input_dim": 84,
+        "n_bus": 6,
+        "n_gen": 3,
+        "activation": "relu"
+    },
+    "training": {
+        "batch_size": 24,
+        "epochs": 50,
+        "lr": 1e-4,
+        "weight_decay": 1e-5
+    }
+}

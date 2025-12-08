@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import argparse
 from model_01 import GCNN_OPF_01
+from model_nodewise import GCNN_OPF_NodeWise
 from config_model_01 import load_config
 
 
@@ -73,12 +74,16 @@ def main():
     print(f"Loading configuration from {args.config}")
     model_config, _ = load_config(args.config)
 
-    print("Initializing GCNN_OPF_01 with loaded config...")
+    print(f"Initializing model ({model_config.model_type}) with loaded config...")
     print(
         f"Config: Neurons={model_config.neurons_fc}, GC_Out={model_config.channels_gc_out}, GC_In={model_config.channels_gc_in}"
     )
 
-    model = GCNN_OPF_01(config=model_config)
+    if model_config.model_type == "nodewise":
+        model = GCNN_OPF_NodeWise(config=model_config)
+    else:
+        model = GCNN_OPF_01(config=model_config)
+
     count_parameters(model)
 
 

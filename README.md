@@ -9,7 +9,23 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 **Key Technologies:** Pyomo, PYPOWER/MATPOWER, Gurobi, PyTorch, NumPy
 
 **Environment:** `opf311` (Anaconda)  
-**Current Phase:** Week 5 - GCNN Optimization Complete (Batch Size = 24, R²=98.44%, P_PG=98.42%)
+**Current Phase:** Week 7-8 - Node-Wise Architecture & Generalization Testing
+
+---
+
+## 🚀 Recent Updates (Dec 2025)
+
+### Node-Wise GCNN Architecture
+- **Goal:** Achieve Inductive Generalization (train on one topology, test on others).
+- **Method:** Removed the "Flattening" layer found in the original paper. Implemented a **Node-Wise Readout** where the same MLP is applied to every node independently.
+- **Result:**
+  - **Parameter Efficiency:** Reduced parameters from ~46k to **5,668** (~90% reduction).
+  - **Seen Data:** Excellent performance (VG R² > 0.999).
+  - **Unseen Data:** Successfully predicted Voltage physics (VG R² 0.65) but failed on Active Power (PG) due to the global nature of cost optimization.
+
+### Configuration System
+- Moved hardcoded parameters to JSON config files in `gcnn_opf_01/configs/`.
+- New parameter `model_type`: `"flattened"` (original) or `"nodewise"` (new).
 
 ---
 

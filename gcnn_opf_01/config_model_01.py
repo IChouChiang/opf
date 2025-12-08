@@ -19,6 +19,10 @@ class ModelConfig:
     n_fc_layers: int = 1  # number of fully connected layers (fc1)
     activation_gs: str = "tanh"  # activation function for GC layers
     dropout: float = 0.0  # dropout probability
+    model_type: str = "flattened"  # "flattened" (original) or "nodewise" (improved)
+    gen_indices: list = (
+        None  # List of generator bus indices (0-based). Default [0,1,2] for Case6ww if None.
+    )
 
     @classmethod
     def from_json(cls, json_path):

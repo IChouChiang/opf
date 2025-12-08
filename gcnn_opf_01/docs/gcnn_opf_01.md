@@ -3,13 +3,41 @@
 ## Configuration System Update (2025-12-08)
 The project has been refactored to use JSON-based configuration files located in `gcnn_opf_01/configs/`. This allows for flexible experimentation with different architectures (e.g., varying `neurons_fc`, `feature_iterations`, `channels_gc_out`).
 
+## Node-Wise Architecture (2025-12-08)
+A new `model_type: "nodewise"` has been implemented to support **Inductive Generalization** (handling different topologies/sizes).
+- **Key Feature**: Removes the "Flattening" layer. The same MLP is applied to every node independently.
+- **Efficiency**: Reduces parameter count by ~90% (5,668 params vs 46k+).
+- **Usage**: Set `"model_type": "nodewise"` in the JSON config.
+
+### Configuration Parameters
+The `ModelConfig` class in `config_model_01.py` supports the following new parameters:
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `model_type` | `str` | `"flattened"` | Architecture type: `"flattened"` (original) or `"nodewise"` (inductive). |
+| `gen_indices` | `list[int]` | `None` | List of 0-based bus indices where generators are located. Required for Node-Wise model to extract correct outputs. If `None`, assumes first `n_gen` buses. |
+
+**Example Config (`configs/exp_nodewise_256n_8c.json`):**
+```json
+{
+    "model": {
+        "model_type": "nodewise",
+        "neurons_fc": 256,
+        "channels_gc_out": 8,
+        "feature_iterations": 8,
+        "gen_indices": [0, 1, 2]
+    },
+    "training": { ... }
+}
+```
+
 **Usage:**
 ```bash
 # Training
-python gcnn_opf_01/train.py --config gcnn_opf_01/configs/exp1_256n_8c.json
+python gcnn_opf_01/train.py --config gcnn_opf_01/configs/exp_nodewise_256n_8c.json
 
 # Evaluation
-python gcnn_opf_01/evaluate.py --config gcnn_opf_01/configs/exp1_256n_8c.json --model_path <path_to_model>
+python gcnn_opf_01/evaluate.py --config gcnn_opf_01/configs/exp_nodewise_256n_8c.json --model_path <path_to_model>
 ```
 
 ## Current Status (2025-11-26) - 🚀 GOAL ACHIEVED (>90% Accuracy)
