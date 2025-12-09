@@ -175,7 +175,6 @@ dnn_opf_03/*.pdf
 
 # GCNN OPF 01 Data
 gcnn_opf_01/data_matlab/
-gcnn_opf_01/data_matlab_npz/
 gcnn_opf_01/archive_legacy_data/
 gcnn_opf_01/data/
 gcnn_opf_01/data_test/

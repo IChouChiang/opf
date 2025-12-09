@@ -1,0 +1,27 @@
+{
+    "model": {
+        "n_bus": 39,
+        "n_gen": 10,
+        "feature_iterations": 10,
+        "channels_gc_in": 10,
+        "channels_gc_out": 8,
+        "neurons_fc": 1000,
+        "n_gc_layers": 3,
+        "n_fc_layers": 3,
+        "activation_gs": "tanh",
+        "dropout": 0.0,
+        "model_type": "flattened"
+    },
+    "training": {
+        "batch_size": 24,
+        "learning_rate": 0.001,
+        "weight_decay": 1e-5,
+        "epochs": 50,
+        "early_stopping_patience": 10,
+        "kappa": 1.0,
+        "use_physics_loss": true,
+        "two_stage": true,
+        "phase1_epochs": 25,
+        "phase2_epochs": 25
+    }
+}

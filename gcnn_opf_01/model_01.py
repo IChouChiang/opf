@@ -219,16 +219,28 @@ class GCNN_OPF_01(nn.Module):
         super().__init__()
         self.config = config
 
-        # GraphConv stack (2 layers for case6ww per paper guidance)
-        self.gc1 = GraphConv(config.channels_gc_in, config.channels_gc_out)
-        self.gc2 = GraphConv(config.channels_gc_out, config.channels_gc_out)
+        # GraphConv stack
+        self.gc_layers = nn.ModuleList()
+        # First layer: in -> out
+        self.gc_layers.append(GraphConv(config.channels_gc_in, config.channels_gc_out))
+        # Subsequent layers: out -> out
+        for _ in range(config.n_gc_layers - 1):
+            self.gc_layers.append(
+                GraphConv(config.channels_gc_out, config.channels_gc_out)
+            )
 
         # Flatten concatenated e,f features
         flat_dim = config.n_bus * 2 * config.channels_gc_out
 
         self.act_fc = nn.ReLU()
         self.dropout = nn.Dropout(config.dropout)
-        self.fc1 = nn.Linear(flat_dim, config.neurons_fc)  # shared trunk
+
+        # FC trunk
+        self.fc_layers = nn.ModuleList()
+        input_dim = flat_dim
+        for _ in range(config.n_fc_layers):
+            self.fc_layers.append(nn.Linear(input_dim, config.neurons_fc))
+            input_dim = config.neurons_fc
 
         # Heads
         self.fc_gen = nn.Linear(config.neurons_fc, config.n_gen * 2)  # (PG, VG)
@@ -269,22 +281,23 @@ class GCNN_OPF_01(nn.Module):
             B = 1
 
         # GraphConv block (handles batched inputs internally)
-        e, f = self.gc1(
-            e_0_k, f_0_k, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag
-        )  # [B, N_BUS, Cout]
-        e, f = self.gc2(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
+        e, f = e_0_k, f_0_k
+        for gc in self.gc_layers:
+            e, f = gc(e, f, pd, qd, g_ndiag, b_ndiag, g_diag, b_diag)
 
         # Node features → FC trunk
         h = torch.cat([e, f], dim=2)  # [B, N_BUS, 2*Cout]
         h_flat = h.view(B, -1)  # [B, N_BUS*2*Cout]
 
         # FC layers (process each sample in batch)
-        h_fc1 = self.act_fc(self.fc1(h_flat))  # [B, NEURONS_FC]
-        h_fc1 = self.dropout(h_fc1)
+        x = h_flat
+        for fc in self.fc_layers:
+            x = self.act_fc(fc(x))
+            x = self.dropout(x)
 
         # Heads
-        gen_flat = self.fc_gen(h_fc1)  # [B, N_GEN*2]
-        v_flat = self.fc_v(h_fc1)  # [B, N_BUS*2]
+        gen_flat = self.fc_gen(x)  # [B, N_GEN*2]
+        v_flat = self.fc_v(x)  # [B, N_BUS*2]
 
         gen_out = gen_flat.view(B, self.config.n_gen, 2)  # [B, N_GEN, 2]
         v_out = v_flat.view(B, self.config.n_bus, 2)  # [B, N_BUS, 2]
