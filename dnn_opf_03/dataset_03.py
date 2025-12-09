@@ -82,8 +82,8 @@ class OPFDataset03(Dataset):
             B_full = b_ndiag + torch.diag(b_diag)
 
             # Flatten
-            g_flat = G_full.view(-1)  # [N*N]
-            b_flat = B_full.view(-1)  # [N*N]
+            g_flat = G_full.reshape(-1)  # [N*N]
+            b_flat = B_full.reshape(-1)  # [N*N]
 
             self.topology_vectors[topo_id] = {"g_flat": g_flat, "b_flat": b_flat}
 

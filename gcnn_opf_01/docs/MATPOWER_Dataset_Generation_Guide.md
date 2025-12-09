@@ -841,3 +841,39 @@ Model 03 sample input dim: torch.Size([3120])
 *Document Version: 1.1*  
 *Last Updated: 2025-12-09*  
 *Changes: Updated k=8→10; Added Model 01 vs 03 data structure comparison*
+
+## 6. Implementation for IEEE 39-Bus System (Case39)
+
+### 6.1 Configuration
+- **System**: IEEE 39-bus (10 Generators, 39 Buses)
+- **RES Integration**:
+    - **Wind Buses**: `[4, 7, 8, 15, 16, 18, 21, 25, 26, 28]` (10 buses)
+    - **PV Buses**: `[3, 12, 20, 23, 24, 27, 29, 39, 1, 9]` (10 buses)
+    - **Penetration**: 50.7% total energy
+- **Topologies**:
+    - **Seen**: Base case + 4 N-1 contingencies (Lines 6-7, 13-14, 2-3, 21-22)
+    - **Unseen**: 3 N-1 contingencies (Lines 23-24, 26-27, 2-25)
+
+### 6.2 Troubleshooting & Workflow
+During implementation, the following issues were encountered and resolved:
+
+#### Encoding / Newline Issues in Scripts
+**Problem**: Writing complex MATLAB scripts using standard text editors or AI tools resulted in "Invalid Expression" errors in MATLAB, likely due to encoding or line ending corruption.
+**Solution**: Use PowerShell's `Set-Content` to robustly write the script files on Windows systems.
+```powershell
+$code = @" ... MATLAB CODE ... "@
+$code | Set-Content -Path script.m -Encoding UTF8
+```
+
+#### HDF5 / v7.3 Compatibility
+**Problem**: MATLAB's `-v7.3` save format uses HDF5, which `scipy.io.loadmat` cannot read without `h5py`.
+**Solution**: Save files using the default MATLAB v7 format (remove the `'-v7.3'` flag) for seamless compatibility with SciPy.
+
+#### PyTorch Memory Layout
+**Problem**: Loading flattened arrays from these datasets caused "view() on non-contiguous tensor" errors in Model 03.
+**Solution**: Use `.reshape()` instead of `.view()` in PyTorch datasets, or call `.contiguous()` before view.
+
+### 6.3 Final Script Structure
+- **Dataset Generation**: `gcnn_opf_01/matlab/generate_dataset_case39_repaired.m` (Script format for batch execution)
+- **Conversion**: `gcnn_opf_01/convert_mat_to_npz.py` (Handles 1-based indexing correction)
+- **Verification**: `verify_datasets_compatibility.py` (Integration test for both models)
