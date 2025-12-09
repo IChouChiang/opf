@@ -172,3 +172,11 @@ dnn_opf_02/results/
 dnn_opf_03/data/
 dnn_opf_03/results/
 dnn_opf_03/*.pdf
+
+# Node.js / Next.js (visualization app)
+node_modules/
+.next/
+out/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
