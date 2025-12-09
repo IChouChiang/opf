@@ -395,3 +395,57 @@ python gcnn_opf_01/evaluate.py \
 
 **Analysis:**
 Similar to previous findings, the model generalizes well for voltage setpoints (94% accuracy) but struggles with active power dispatch on unseen topologies (40% accuracy). This confirms the need for N-k training or using the model as a warm-start initializer.
+
+## Data Generation Pipeline Update (2025-12-09)
+To support large-scale dataset generation (13.2k samples) for IEEE 39-bus system, the generation pipeline has been migrated from Python (Pyomo) to **MATLAB/MATPOWER** to leverage parallel processing capabilities.
+
+### New Pipeline Structure
+1.  **Generation (MATLAB):**
+    *   **Script:** `gcnn_opf_01/matlab/generate_dataset_case39.m`
+    *   **Engine:** MATPOWER `runopf` with `parfor` (Parallel Computing Toolbox).
+    *   **Output:** `.mat` files in `gcnn_opf_01/data_matlab/`.
+    *   **Performance:** Generates ~13k samples in minutes/hours (vs days with serial Python).
+    *   **Features:**
+        *   Parallel execution.
+        *   Automatic warning suppression (`nearlySingularMatrix`) for clean logs.
+        *   Progress tracking.
+        *   Validates `res.success` flag to ensure only feasible samples are saved.
+
+2.  **Conversion (Python):**
+    *   **Script:** `gcnn_opf_01/scripts/convert_mat_to_npz.py`
+    *   **Function:** Converts MATLAB structs to Python `.npz` format compatible with the GCNN loader.
+    *   **Output:** `.npz` files in `gcnn_opf_01/data_matlab_npz/`.
+
+3.  **Verification (Python):**
+    *   **Script:** `gcnn_opf_01/scripts/verify_case39_data.py`
+    *   **Function:** Checks data shapes, NaN values, and statistical distributions.
+
+### Dataset Specifications (Case39)
+*   **Training Set:** 10,000 samples
+*   **Test Set:** 2,000 samples
+*   **Unseen Topologies:** 1,200 samples
+*   **Feature Iterations ($k$):** 10
+*   **Base MVA:** 100.0
+
+### Usage
+**1. Generate Data (MATLAB):**
+```matlab
+cd gcnn_opf_01/matlab
+generate_dataset_case39
+```
+*Or from PowerShell:*
+```powershell
+matlab -batch "cd gcnn_opf_01/matlab; generate_dataset_case39"
+```
+
+**2. Convert to Python Format:**
+```bash
+python gcnn_opf_01/scripts/convert_mat_to_npz.py
+```
+
+**3. Verify Data:**
+```bash
+python gcnn_opf_01/scripts/verify_case39_data.py
+```
+
+---

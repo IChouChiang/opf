@@ -232,10 +232,17 @@ For each topology, specify which branch(es) to remove using 1-based bus pairs:
 % Example for IEEE 39-bus system
 topology_pairs = {
     [],           % Topology 0: Base case (no outage)
-    [5, 2],       % Topology 1: Remove line between buses 5-2
-    [1, 2],       % Topology 2: Remove line between buses 1-2
+    [6, 7],       % Topology 1: Remove line between buses 6-7
+    [14, 13],     % Topology 2: Remove line between buses 14-13
     [2, 3],       % Topology 3: Remove line between buses 2-3
-    [5, 6],       % Topology 4: Remove line between buses 5-6
+    [21, 22],     % Topology 4: Remove line between buses 21-22
+};
+
+% Unseen Topologies (for Zero-Shot Generalization Test)
+topology_unseen = {
+    [23, 24],     % Unseen 1: Remove line between buses 23-24
+    [26, 27],     % Unseen 2: Remove line between buses 26-27
+    [2, 25],      % Unseen 3: Remove line between buses 2-25
 };
 ```
 

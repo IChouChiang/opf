@@ -66,7 +66,7 @@ from pyomo.environ import value
 N_TRAIN = 10000  # Training samples
 N_TEST = 2000  # Test samples
 N_TOPOLOGIES = 5  # Base + 4 N-1 contingencies
-K_FEATURES = 8  # Feature construction iterations
+K_FEATURES = 10  # Feature construction iterations
 BATCH_SIZE = 10  # Mini-batch size (for reference, not used in generation)
 RNG_SEED_TRAIN = 42  # Random seed for training set
 RNG_SEED_TEST = 123  # Random seed for test set (different from train)
@@ -117,8 +117,12 @@ def precompute_topology_operators():
 
         # Convert torch tensors to numpy arrays
         # Use .detach().cpu() to move to CPU, then convert via list for NumPy 2.x compatibility
-        g_ndiag_all[topo_id] = np.array(g_ndiag.detach().cpu().tolist(), dtype=np.float32)
-        b_ndiag_all[topo_id] = np.array(b_ndiag.detach().cpu().tolist(), dtype=np.float32)
+        g_ndiag_all[topo_id] = np.array(
+            g_ndiag.detach().cpu().tolist(), dtype=np.float32
+        )
+        b_ndiag_all[topo_id] = np.array(
+            b_ndiag.detach().cpu().tolist(), dtype=np.float32
+        )
         g_diag_all[topo_id] = np.array(g_diag.detach().cpu().tolist(), dtype=np.float32)
         b_diag_all[topo_id] = np.array(b_diag.detach().cpu().tolist(), dtype=np.float32)
 
@@ -184,8 +188,12 @@ def generate_sample(
     qd_torch = torch.tensor(qd_np, dtype=torch.float32).to(device)
 
     # 3. Get topology operators and move to device
-    g_ndiag = torch.tensor(operators["g_ndiag"][topo_id], dtype=torch.float32).to(device)
-    b_ndiag = torch.tensor(operators["b_ndiag"][topo_id], dtype=torch.float32).to(device)
+    g_ndiag = torch.tensor(operators["g_ndiag"][topo_id], dtype=torch.float32).to(
+        device
+    )
+    b_ndiag = torch.tensor(operators["b_ndiag"][topo_id], dtype=torch.float32).to(
+        device
+    )
     g_diag = torch.tensor(operators["g_diag"][topo_id], dtype=torch.float32).to(device)
     b_diag = torch.tensor(operators["b_diag"][topo_id], dtype=torch.float32).to(device)
 
@@ -203,7 +211,7 @@ def generate_sample(
         "QG_max": gen_limits["QG_max"].to(device),
         "gen_mask": gen_limits["gen_mask"].to(device),
     }
-    
+
     e_0_k, f_0_k = construct_features(
         pd=pd_torch,
         qd=qd_torch,
@@ -224,7 +232,9 @@ def generate_sample(
 
     # 5. Build scenario ppc for AC-OPF
     ppc_topo = apply_topology(ppc_base, topo_id)
-    ppc_scenario = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in ppc_topo.items()}
+    ppc_scenario = {
+        k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in ppc_topo.items()
+    }
     ppc_scenario["bus"][:, 2] = pd_np * baseMVA  # PD in MW
     ppc_scenario["bus"][:, 3] = qd_np * baseMVA  # QD in MVAr
 
@@ -250,7 +260,9 @@ def generate_sample(
 
         # 8. Return sample dict (convert tensors back to numpy via detach().cpu().tolist())
         return {
-            "e_0_k": np.array(e_0_k.detach().cpu().tolist(), dtype=np.float32),  # [N_BUS, K_FEATURES]
+            "e_0_k": np.array(
+                e_0_k.detach().cpu().tolist(), dtype=np.float32
+            ),  # [N_BUS, K_FEATURES]
             "f_0_k": np.array(f_0_k.detach().cpu().tolist(), dtype=np.float32),
             "pd": pd_np,  # [N_BUS]
             "qd": qd_np,
@@ -264,7 +276,18 @@ def generate_sample(
         return None
 
 
-def generate_dataset(n_samples, rng_seed, split_name, operators, ppc_base, baseMVA, bus, gen, N_BUS, N_GEN):
+def generate_dataset(
+    n_samples,
+    rng_seed,
+    split_name,
+    operators,
+    ppc_base,
+    baseMVA,
+    bus,
+    gen,
+    N_BUS,
+    N_GEN,
+):
     """
     Generate a dataset (training or test).
 
@@ -333,10 +356,14 @@ def generate_dataset(n_samples, rng_seed, split_name, operators, ppc_base, baseM
     while n_success < n_samples:
         # Safety check: avoid infinite loop
         if consecutive_failures >= max_consecutive_failures:
-            print(f"\n  ERROR: {consecutive_failures} consecutive failures. Stopping generation.")
-            print(f"  This might indicate a systematic issue with the scenarios or solver.")
+            print(
+                f"\n  ERROR: {consecutive_failures} consecutive failures. Stopping generation."
+            )
+            print(
+                f"  This might indicate a systematic issue with the scenarios or solver."
+            )
             break
-            
+
         sample = generate_sample(
             sample_idx,
             gen_obj,
@@ -443,7 +470,9 @@ def main():
     print(f"  Topologies: {N_TOPOLOGIES}")
     print(f"  Feature iterations: {K_FEATURES}")
     print(f"  RNG seeds: train={RNG_SEED_TRAIN}, test={RNG_SEED_TEST}")
-    print(f"  Solver: time_limit={SOLVER_TIME_LIMIT}s, mip_gap={SOLVER_MIP_GAP}, threads={SOLVER_THREADS}")
+    print(
+        f"  Solver: time_limit={SOLVER_TIME_LIMIT}s, mip_gap={SOLVER_MIP_GAP}, threads={SOLVER_THREADS}"
+    )
 
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -456,12 +485,30 @@ def main():
 
     # Step 2: Generate training set
     train_data = generate_dataset(
-        N_TRAIN, RNG_SEED_TRAIN, "train", operators, ppc_base, baseMVA, bus, gen, N_BUS, N_GEN
+        N_TRAIN,
+        RNG_SEED_TRAIN,
+        "train",
+        operators,
+        ppc_base,
+        baseMVA,
+        bus,
+        gen,
+        N_BUS,
+        N_GEN,
     )
 
     # Step 3: Generate test set
     test_data = generate_dataset(
-        N_TEST, RNG_SEED_TEST, "test", operators, ppc_base, baseMVA, bus, gen, N_BUS, N_GEN
+        N_TEST,
+        RNG_SEED_TEST,
+        "test",
+        operators,
+        ppc_base,
+        baseMVA,
+        bus,
+        gen,
+        N_BUS,
+        N_GEN,
     )
 
     # Step 4: Compute normalization statistics
@@ -503,7 +550,9 @@ def main():
     print(f"  {test_path}")
     print(f"  {operators_path}")
     print(f"  {stats_path}")
-    print(f"\nTotal storage: {(train_path.stat().st_size + test_path.stat().st_size) / 1024 / 1024:.2f} MB")
+    print(
+        f"\nTotal storage: {(train_path.stat().st_size + test_path.stat().st_size) / 1024 / 1024:.2f} MB"
+    )
 
 
 if __name__ == "__main__":
