@@ -119,20 +119,11 @@ def construct_features(
         QG_bus[gen_bus_indices_tensor] = QG_gen_clamped
 
         # Update effective demands after clamping
-        # We want delta = P_inj - s*G_diag = (PG - PD) - s*G_diag
-        # Code uses delta = -pd_eff - s*G_diag
-        # So pd_eff should be -(PG - PD) = PD - PG
-
-        # Create PG_actual, QG_actual (0 at load buses, clamped at gen buses)
-        PG_actual = torch.zeros_like(PG_bus)
-        QG_actual = torch.zeros_like(QG_bus)
-
-        PG_actual[gen_bus_indices_tensor] = PG_gen_clamped
-        QG_actual[gen_bus_indices_tensor] = QG_gen_clamped
-
-        # pd_eff = PD - PG_actual
-        pd_eff = pd - PG_actual
-        qd_eff = qd - QG_actual
+        # PD_eff = PG - (e*Ge - e*Bf + f*Gf + f*Be)
+        # QD_eff = QG - (e*Gf - e*Be - f*Ge + f*Bf)
+        # But we use the clamped PG/QG to re-compute pd_eff, qd_eff
+        pd_eff = PG_bus - (e * Ge - e * Bf + f * Gf + f * Be)
+        qd_eff = QG_bus - (e * Gf - e * Be - f * Ge + f * Bf)
 
         # -----------------------------------------------------------------
         # Step 2c: Compute α, β, δ, λ (eqs 19–22)
