@@ -125,6 +125,13 @@ def parse_args():
         "--log_interval", type=int, default=10, help="Log every N batches"
     )
 
+    # Resume options
+    parser.add_argument(
+        "--resume_phase2",
+        action="store_true",
+        help="Skip Phase 1 and resume training from Phase 2 using best_model_phase1.pth",
+    )
+
     return parser.parse_args()
 
 
@@ -143,6 +150,7 @@ def run_training_phase(
     log_interval,
     patience,
     start_epoch=1,
+    scheduler=None,
 ):
     """Run a single training phase."""
     print(f"\n{'='*80}")
@@ -156,7 +164,10 @@ def run_training_phase(
 
     for epoch in range(start_epoch, start_epoch + epochs):
         epoch_start = time.time()
-        print(f"\nEpoch {epoch}/{start_epoch + epochs - 1} ({phase_name})")
+        current_lr = optimizer.param_groups[0]["lr"]
+        print(
+            f"\nEpoch {epoch}/{start_epoch + epochs - 1} ({phase_name}) | LR: {current_lr:.2e}"
+        )
         print("-" * 80)
 
         # Train
@@ -170,6 +181,10 @@ def run_training_phase(
             use_physics=use_physics,
             log_interval=log_interval,
         )
+
+        # Step scheduler if provided
+        if scheduler:
+            scheduler.step()
 
         # Validate
         val_metrics = validate(
@@ -295,16 +310,16 @@ def train_epoch(
         )
         n_batches += 1
 
-        pbar.set_postfix({"loss": f"{loss.item():.4f}"})
-
-        if (batch_idx + 1) % log_interval == 0:
-            avg_loss = total_loss / n_batches
-            avg_sup = total_sup_loss / n_batches
-            avg_phys = total_phys_loss / n_batches
-            print(
-                f"  Batch {batch_idx+1}/{len(train_loader)}: "
-                f"Loss={avg_loss:.6f} (Sup={avg_sup:.6f}, Phys={avg_phys:.6f})"
-            )
+        current_phys = (
+            phys_loss.item() if isinstance(phys_loss, torch.Tensor) else phys_loss
+        )
+        pbar.set_postfix(
+            {
+                "loss": f"{loss.item():.4f}",
+                "sup": f"{sup_loss.item():.4f}",
+                "phys": f"{current_phys:.4f}",
+            }
+        )
 
     return {
         "loss": total_loss / n_batches,
@@ -395,6 +410,10 @@ def main():
     args.kappa = training_config.kappa
     args.use_physics_loss = training_config.use_physics_loss
     args.two_stage = training_config.two_stage
+    args.phase1_epochs = training_config.phase1_epochs
+    args.phase2_epochs = training_config.phase2_epochs
+    args.phase2_lr = training_config.phase2_lr
+    args.phase2_kappa = training_config.phase2_kappa
 
     # Create results directory
     results_dir = Path(args.results_dir)
@@ -429,20 +448,26 @@ def main():
     print(f"Validation samples: {len(val_dataset)}")
 
     # Create dataloaders
+    # Optimize for GPU throughput
+    num_workers = 4 if device.type == "cuda" else 0
+    pin_memory = True if device.type == "cuda" else False
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=0,
-        pin_memory=True if device.type == "cuda" else False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=True if num_workers > 0 else False,
     )
 
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0,
-        pin_memory=True if device.type == "cuda" else False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=True if num_workers > 0 else False,
     )
 
     # Create model
@@ -470,32 +495,47 @@ def main():
     # Training Logic
     if args.two_stage:
         # --- PHASE 1: Supervised Pre-training ---
-        optimizer = optim.Adam(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-        )
+        if args.resume_phase2:
+            print("\nSkipping Phase 1 (Resuming Phase 2)...")
+            hist1 = {"train": [], "val": []}
+        else:
+            optimizer = optim.Adam(
+                model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+            )
 
-        hist1 = run_training_phase(
-            "Phase1",
-            model,
-            train_loader,
-            val_loader,
-            optimizer,
-            device,
-            A_g2b,
-            epochs=args.phase1_epochs,
-            kappa=0.0,  # Pure supervised
-            use_physics=False,  # Disable physics calculation for speed/purity
-            results_dir=results_dir,
-            log_interval=args.log_interval,
-            patience=args.patience,
-            start_epoch=1,
-        )
+            # Scheduler for Phase 1: Drop LR by 0.1 at 50% of epochs (e.g., 1000/2000)
+            # Paper: "learning rate is 0.001 in the first 1000 epochs and changes to 0.0001"
+            step_size = args.phase1_epochs // 2
+            scheduler = optim.lr_scheduler.StepLR(
+                optimizer, step_size=step_size, gamma=0.1
+            )
+
+            hist1 = run_training_phase(
+                "Phase1",
+                model,
+                train_loader,
+                val_loader,
+                optimizer,
+                device,
+                A_g2b,
+                epochs=args.phase1_epochs,
+                kappa=0.0,  # Pure supervised
+                use_physics=False,  # Disable physics calculation for speed/purity
+                results_dir=results_dir,
+                log_interval=args.log_interval,
+                patience=args.patience,
+                start_epoch=1,
+                scheduler=scheduler,
+            )
 
         # Load best model from Phase 1
         best_p1_path = results_dir / "best_model_phase1.pth"
         if best_p1_path.exists():
             model.load_state_dict(torch.load(best_p1_path))
             print("\nLoaded best model from Phase 1 for Phase 2.")
+        elif args.resume_phase2:
+            print("\nError: best_model_phase1.pth not found! Cannot resume Phase 2.")
+            return
 
         # --- PHASE 2: Physics Fine-tuning ---
         # Re-initialize optimizer with lower LR

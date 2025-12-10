@@ -41,7 +41,7 @@ def count_parameters(model):
         layer_type = "Other"
         if "gc" in name:
             layer_type = "GraphConv"
-        elif "fc1" in name:
+        elif "fc1" in name or "fc_layers" in name:
             layer_type = "FC Trunk"
         elif "fc_gen" in name or "fc_v" in name:
             layer_type = "Heads"

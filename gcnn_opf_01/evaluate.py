@@ -59,6 +59,12 @@ def parse_args():
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Device to use",
     )
+    parser.add_argument(
+        "--output_file",
+        type=str,
+        default="evaluation_results.npz",
+        help="Filename to save evaluation results",
+    )
     return parser.parse_args()
 
 
@@ -311,7 +317,7 @@ def main():
         )
 
     # Save results
-    results_path = Path(args.model_path).parent / "evaluation_results.npz"
+    results_path = Path(args.model_path).parent / args.output_file
     np.savez(
         results_path,
         predictions=predictions,

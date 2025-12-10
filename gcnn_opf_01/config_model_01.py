@@ -61,6 +61,8 @@ class TrainingConfig:
     two_stage: bool = False
     phase1_epochs: int = 25
     phase2_epochs: int = 25
+    phase2_lr: float = 1e-4
+    phase2_kappa: float = 1.0
 
     @classmethod
     def from_json(cls, json_path):
