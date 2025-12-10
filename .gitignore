@@ -145,11 +145,11 @@ ehthumbs.db
 Desktop.ini
 
 # Project-specific
-Week3/IEEE_118_bus_test_system.xlsx
-Week3/Week 3 Description.md
-Week3/samples/
-Week3/results/
-Week3/~$*.xlsx
+weekly_assignments/Week3/IEEE_118_bus_test_system.xlsx
+weekly_assignments/Week3/Week 3 Description.md
+weekly_assignments/Week3/samples/
+weekly_assignments/Week3/results/
+weekly_assignments/Week3/~$*.xlsx
 
 # Outputs directory
 outputs/
@@ -175,6 +175,7 @@ dnn_opf_03/*.pdf
 
 # GCNN OPF 01 Data
 gcnn_opf_01/data_matlab/
+gcnn_opf_01/data_matlab_npz/
 gcnn_opf_01/archive_legacy_data/
 gcnn_opf_01/data/
 gcnn_opf_01/data_test/

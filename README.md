@@ -33,12 +33,12 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 
 ```
 opf/
-├── Week2/              # DC-OPF: linear formulation, case9
-├── Week3/              # ML prediction: DCOPF → MLP, case118
-│   ├── samples/        # Training data (chunked .npz)
-│   └── results/        # Trained models
-├── Week5/              # GCNN project documentation (Chinese)
-│   └── Week5.md        # Comprehensive documentation with results
+├── weekly_assignments/ # Progressive learning modules
+│   ├── Week2/          # DC-OPF: linear formulation, case9
+│   ├── Week3/          # ML prediction: DCOPF → MLP, case118
+│   ├── Week5/          # GCNN project documentation (Chinese)
+│   ├── Week6/          # Advanced topics
+│   └── Week7to8/       # Physics-Informed ML (Model 01 vs Model 03)
 ├── gcnn_opf_01/        # Physics-guided GCNN for OPF (case6ww)
 │   ├── data/           # 12k samples (10k train, 2k test) [git-ignored]
 │   ├── results/        # Training results & tuning [git-ignored]

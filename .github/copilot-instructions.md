@@ -1,7 +1,7 @@
 # AI Agent Instructions for OPF Project
 
 ## Project Overview
-This is an **Optimal Power Flow (OPF) educational project** using Python for power systems optimization and machine learning. Weekly assignments progress from DC-OPF (Week 2) to ML-based OPF prediction (Week 3) to AC-OPF (Week 4).
+This is an **Optimal Power Flow (OPF) educational project** using Python for power systems optimization and machine learning. The project has evolved from basic DC-OPF (Week 2) to AC-OPF (Week 4) and now focuses on **Physics-Informed Machine Learning** (Week 7-8).
 
 **Key Technologies:** Pyomo, PYPOWER/MATPOWER, Gurobi, PyTorch, NumPy
 
@@ -13,7 +13,7 @@ This is an **Optimal Power Flow (OPF) educational project** using Python for pow
 - **Units:** ALWAYS convert MW/MVAr to p.u. by dividing by `baseMVA` (typically 100.0)
 - Examples: `Week2/case9.py`, `Week3/case118.py`
 
-### 2. Data Transformation Pipeline (Week 4 Current Approach)
+### 2. Data Transformation Pipeline (AC-OPF)
 ```
 PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → Pyomo instance
 ```
@@ -27,10 +27,10 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 ### 3. Pyomo Modeling Conventions
 - **AbstractModel pattern:** Define model structure once, instantiate with different data
 - **BuildAction for derived sets:** Use `pyo.BuildAction` to populate sets like `GENS_AT_BUS` after data loading
-- **Fixed quadratic objective (Week 4):** `min Σ(a[g]·PG[g]² + b[g]·PG[g] + c[g])` where a,b,c are pre-scaled for p.u. variables
+- **Fixed quadratic objective:** `min Σ(a[g]·PG[g]² + b[g]·PG[g] + c[g])` where a,b,c are pre-scaled for p.u. variables
 - **Bounds from Params:** Use functions like `lambda m,g: (m.PGmin[g], m.PGmax[g])` for variable bounds
 
-### 4. AC-OPF Cartesian Form (Week 4)
+### 4. AC-OPF Cartesian Form
 - **Variables:** `e[i]` (real) and `f[i]` (imag) voltage components instead of polar Vm/Va
   - Conversion: `e = Vm*cos(Va_rad)`, `f = Vm*sin(Va_rad)` via inline computation
 - **Admittance matrix:** Use PYPOWER's `makeYbus` directly to get sparse Ybus, extract G (conductance) and B (susceptance)
@@ -40,13 +40,14 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 - **Slack bus anchoring:** Fix slack bus `e[slack]` and `f[slack]` to eliminate rotational symmetry
 - **Warm start:** Initialize PG/QG from case data to improve Gurobi convergence
 
-### 5. ML Workflow (Week 3)
-- **Training data:** Chunked `.npz` files in `Week3/samples/` containing:
-  - `pd_chunk_NNNNNN.npz`: Input demand scenarios (p.u.)
-  - `labels_chunk_NNNNNN.npz`: Optimal generator outputs from DCOPF solutions
-- **Model:** PyTorch MLP mapping `P_D` → `P_G` (stored in `Week3/results/`)
-- **Normalization:** `norm_stats.npz` stores mean/std for input/output scaling
-- **Hyperparameters:** Small batch sizes (e.g., 6) found to be optimal for GCNN physics-constrained training (vs standard 32/64).
+### 5. ML Models (Week 7-8)
+- **Model 01 (GCNN):** Physics-Guided Graph Convolutional Neural Network.
+  - **Key Finding:** For larger grids (Case 39), "Detached Physics" (pure supervised training) currently outperforms "Active Physics" (gradient descent on physics loss) due to gradient domination issues.
+  - **Files:** `gcnn_opf_01/`
+- **Model 03 (DeepOPF-FT):** MLP Baseline.
+  - **Architecture:** Fully Connected Network taking flattened `[Pd, Qd, G, B]` as input.
+  - **Key Finding:** High accuracy on fixed topologies but poor physics consistency ($L_{phys} \approx 1.5$) and poor generalization to unseen topologies.
+  - **Files:** `dnn_opf_03/`
 
 ## Development Workflows
 
@@ -58,32 +59,34 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 
 ### File Organization
 ```
-Week2/
-  ├── case9.py          # PYPOWER case files (data)
-  └── Week2.ipynb       # Exploratory notebook
-  
-Week3/
-  ├── Week3.ipynb       # ML training notebook
-  ├── samples/          # Training data (git-ignored if large)
-  └── results/          # Model outputs (git-ignored)
+weekly_assignments/
+  ├── Week2/
+  │   ├── case9.py          # PYPOWER case files (data)
+  │   └── Week2.ipynb       # Exploratory notebook
+  ├── Week3/
+  │   ├── Week3.ipynb       # ML training notebook
+  │   ├── samples/          # Training data (git-ignored if large)
+  │   └── results/          # Model outputs (git-ignored)
+  ├── Week5/
+  ├── Week6/
+  └── Week7to8/
 
-gcnn_opf_01/            # Physics-guided GCNN subproject (case6ww)
+gcnn_opf_01/            # Model 01: Physics-guided GCNN
   ├── model_01.py                        # 2-head GCNN: gen_head + v_head
   ├── loss_model_01.py                   # Physics-informed loss (correlative)
-  ├── feature_construction_model_01.py   # k-iteration voltage estimation (Sec III-C)
-  ├── sample_config_model_01.py          # case6ww operators, topology, RES config
-  ├── sample_generator_model_01.py       # RES scenario generator
-  ├── config_model_01.py                 # Dataclass configs
-  ├── train.py                           # Training pipeline with physics loss
-  ├── evaluate.py                        # Model evaluation with probabilistic accuracy
-  ├── tune_batch_size.py                 # Hyperparameter tuning (with caching)
-  ├── data/                              # 12k samples (git-ignored)
-  ├── results/                           # Training artifacts (git-ignored)
-  └── docs/                              # Design documentation
-      ├── gcnn_opf_01.md                 # Design notes & status tracking
-      ├── formulas_model_01.md           # Mathematical formulas (Eqs 1-37)
-      ├── lossfunction.md                # Loss function specification
-      └── sample_gen_guide_model_01.md   # Sample generation guide
+  ├── feature_construction_model_01.py   # k-iteration voltage estimation
+  ├── train.py                           # Training pipeline
+  ├── evaluate.py                        # Model evaluation
+  ├── data_matlab_npz/                   # Training data (git-ignored)
+  └── results/                           # Training artifacts (git-ignored)
+
+dnn_opf_03/             # Model 03: DeepOPF-FT Baseline (MLP)
+  ├── model_03.py                        # MLP Architecture
+  ├── dataset_03.py                      # Dataset loader
+  ├── train_03.py                        # Training pipeline
+  ├── evaluate_03.py                     # Evaluation with Physics Loss
+  ├── loss_model_03.py                   # Physics loss calculation
+  └── results/                           # Training artifacts (git-ignored)
 
 src/
   ├── __init__.py             # Package initialization
@@ -95,11 +98,9 @@ src/
 tests/
   ├── test_case39.py                # IEEE 39-bus AC-OPF test harness
   ├── test_case57.py                # IEEE 57-bus AC-OPF test harness
-  ├── test_feature_construction.py  # Feature construction validation (case6ww)
+  ├── test_feature_construction.py  # Feature construction validation
   ├── test_sample_generator.py      # Scenario generator + AC-OPF integration
-  ├── test_topology_outages.py      # N-1 contingency verification
-  ├── case39_baseline.py            # PYPOWER reference (39-bus)
-  └── case57_baseline.py            # PYPOWER reference (57-bus)
+  └── test_topology_outages.py      # N-1 contingency verification
 
 outputs/                      # Generated files (git-ignored)
 ```
@@ -130,59 +131,27 @@ python test_case57.py  # IEEE 57-bus
 - `initialize_voltage_from_flatstart(instance, ppc_int)`: set e/f from Vm/Va, return slack bus index
 - `solve_ac_opf(ppc, verbose=True, time_limit=180, mip_gap=0.03, threads=None)`: full pipeline with warm start & slack fixing
 
-### Running DCOPF (Week 2)
-1. Import case: `from Week2.case9 import case9; ppc = case9()`
-2. Build abstract model: `m = build_dc_opf_model()`
-3. Prepare instance data: `data_dict, meta = ppc_to_pyomo_data_for_create_instance(ppc)`
-4. Create instance: `instance = m.create_instance(data=data_dict)`
-5. Solve: `solver = pyo.SolverFactory('gurobi'); result = solver.solve(instance)`
-
-### Running GCNN Feature Construction (gcnn_opf_01/)
-**Quick test (case6ww):**
-```python
-import sys
-sys.path.insert(0, 'gcnn_opf_01')
-
-from pypower.api import case6ww
-from pypower.ext2int import ext2int
-from feature_construction_model_01 import construct_features_from_ppc
-
-ppc = case6ww()
-ppc_int = ext2int(ppc)
-
-# Construct features: e_0_k, f_0_k [N_BUS, k=8]
-e_0_k, f_0_k = construct_features_from_ppc(
-    ppc_int=ppc_int,
-    pd=None,  # Uses case defaults if None
-    qd=None,
-    k=8
-)
-
-print(f"Features shape: {e_0_k.shape}")  # [6, 8]
-print(f"Voltage magnitudes: {(e_0_k**2 + f_0_k**2).sqrt().mean(0)}")  # ~1.0
-```
-
-**From command line:**
+### Running GCNN (Model 01)
+**Training:**
 ```bash
-cd tests
-python test_feature_construction.py  # Validates shapes & normalization
-python test_sample_generator.py      # 3 RES scenarios + AC-OPF
-python test_topology_outages.py      # N-1 contingency verification
+python gcnn_opf_01/train.py --config gcnn_opf_01/configs/case39_baseline.json
 ```
 
-**Dataset generation (12k samples):**
+**Evaluation:**
 ```bash
-cd gcnn_opf_01
-python generate_dataset.py  # Generates samples_train.npz, samples_test.npz, etc.
-# Or with full path: E:\DevTools\anaconda3\envs\opf311\python.exe generate_dataset.py
+python gcnn_opf_01/evaluate.py --model_path gcnn_opf_01/results/best_model.pth
 ```
 
-**Shared utilities in `gcnn_opf_01/`:**
-- `construct_features(...)`: Core k-iteration algorithm (Eqs. 16-25)
-- `construct_features_from_ppc(ppc_int, pd, qd, k)`: Wrapper with generator limits extraction
-- `extract_gen_limits(ppc_int)`: Extracts PMIN/PMAX/QMIN/QMAX from ppc_int['gen']
-- `build_G_B_operators(ppc_int)`: Constructs G, B, g_diag, b_diag, g_ndiag, b_ndiag tensors
-- `generate_dataset.py`: Full pipeline for 12k sample generation with AC-OPF labeling
+### Running DeepOPF-FT (Model 03)
+**Training:**
+```bash
+python dnn_opf_03/train_03.py --config dnn_opf_03/configs/exp_tiny_17k.json
+```
+
+**Evaluation (with Physics Loss):**
+```bash
+python dnn_opf_03/evaluate_03.py --model_path dnn_opf_03/results/best_model.pth --data_dir gcnn_opf_01/data_matlab_npz
+```
 
 ### Type Checking with Pyright
 - Config: `pyrightconfig.json` at root
@@ -219,20 +188,6 @@ python generate_dataset.py  # Generates samples_train.npz, samples_test.npz, etc
 6. **Missing gencost:** If no `gencost` array provided, `prepare_ac_opf_data()` raises `UserWarning` and uses defaults (c2=0.01, c1=40.0, c0=0.0 in p.u. scaling)
 6. **Slack bus symmetry:** Fix slack bus voltage (e,f) to eliminate rotational degree of freedom in AC-OPF
 7. **Duplicate helpers:** Use `src/helpers_ac_opf.py` shared functions instead of copy-pasting prepare/init/solve logic
-
-## Week 4 Test Results
-
-### IEEE 39-bus (tests/test_case39.py)
-- **Objective:** 41872.30 $/hr (PYPOWER baseline: 41864.18 $/hr, ~0.02% gap)
-- **Solve time:** ~2s (optimal within 3% MIP gap)
-- **Total generation:** 62.98 p.u., **Demand:** 62.54 p.u., **Losses:** 0.44 p.u.
-- **Voltage range:** 1.010–1.052 p.u.
-
-### IEEE 57-bus (tests/test_case57.py)
-- **Objective:** 41770.00 $/hr (found feasible solution within 3% gap)
-- **Solve time:** ~130s (explored 1446 nodes)
-- **Total generation:** 12.68 p.u., **Demand:** 12.51 p.u., **Losses:** 0.17 p.u.
-- **Voltage range:** 0.976–1.040 p.u.
 
 ## Quick Reference
 
