@@ -255,3 +255,11 @@ The GCNN is not designed to beat the MLP on a *fixed, small topology*. Its super
 **Strategic Pivot**:
 Instead of trying to force the GCNN to beat the MLP on Case 39 (fixed), we should focus on demonstrating its **Zero-Shot Generalization** capabilities, which is the true value proposition of the method.
 
+
+**4. Training Schedule Adjustment**
+*   **Observation**: The original paper uses a specific schedule: 2000 epochs for Phase 1 (Supervised) and 200 epochs for Phase 2 (Physics).
+*   **Action**: Updated 	rain_case39.json to match this pattern:
+    *   Phase 1: 2000 epochs (LR 0.001 -> 0.0001 via StepLR at epoch 1000).
+    *   Phase 2: 200 epochs (LR 0.0001, Physics $\kappa=1.0$).
+*   **Rationale**: This ensures the model is fully converged on the supervised task before applying the physics constraint, preventing the physics loss from dominating the early learning phase or getting stuck in local minima.
+
