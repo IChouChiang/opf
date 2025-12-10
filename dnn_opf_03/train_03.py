@@ -279,10 +279,10 @@ def train_epoch(
                     A_g2b,
                     kappa=0.0,
                 )
-                phys_loss_total += loss_p.item()
+                phys_loss_total += loss_p
 
             phys_loss = phys_loss_total / batch_size
-            loss = sup_loss + kappa * torch.tensor(phys_loss, device=device)
+            loss = sup_loss + kappa * phys_loss
         else:
             phys_loss = 0.0
             loss = sup_loss
@@ -305,7 +305,7 @@ def train_epoch(
             avg_loss = total_loss / n_batches
             avg_sup = total_sup_loss / n_batches
             avg_phys = total_phys_loss / n_batches
-            print(
+            pbar.write(
                 f"  Batch {batch_idx+1}/{len(train_loader)}: "
                 f"Loss={avg_loss:.6f} (Sup={avg_sup:.6f}, Phys={avg_phys:.6f})"
             )

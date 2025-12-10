@@ -15,8 +15,14 @@ class ModelConfig:
     # For Case6ww: 12 + 72 = 84
     input_dim: int = 84
 
+    # Flexible layer configuration
+    # If hidden_layers is provided, it overrides hidden_dim/n_hidden_layers
+    hidden_layers: list = None
+
+    # Legacy support
     hidden_dim: int = 1000
     n_hidden_layers: int = 3
+
     activation: str = "relu"
 
     @classmethod

@@ -276,7 +276,7 @@ def train_epoch(
 
         # Physics loss (optional)
         if use_physics:
-            phys_loss_total = 0.0
+            phys_loss_accum = 0.0
             # Compute physics loss for each sample in batch
             for i in range(e_0_k.size(0)):
                 loss_t, loss_s, loss_p = correlative_loss_pg(
@@ -290,10 +290,12 @@ def train_epoch(
                     A_g2b,  # [N_BUS, N_GEN]
                     kappa=0.0,  # Don't double-apply kappa, we scale manually
                 )
-                phys_loss_total += loss_p.item()
-            phys_loss = phys_loss_total / e_0_k.size(0)  # Average
+                phys_loss_accum = phys_loss_accum + loss_p
 
-            loss = sup_loss + kappa * torch.tensor(phys_loss, device=device)
+            phys_loss_tensor = phys_loss_accum / e_0_k.size(0)  # Average tensor
+            phys_loss = phys_loss_tensor.item()  # For logging
+
+            loss = sup_loss + kappa * phys_loss_tensor
         else:
             phys_loss = 0.0
             loss = sup_loss

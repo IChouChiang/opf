@@ -20,23 +20,29 @@ class AdmittanceDNN(nn.Module):
         layers = []
         input_dim = config.input_dim
 
+        # Determine layer structure
+        if config.hidden_layers is not None and len(config.hidden_layers) > 0:
+            layer_sizes = config.hidden_layers
+        else:
+            layer_sizes = [config.hidden_dim] * config.n_hidden_layers
+
         # Hidden layers
-        for _ in range(config.n_hidden_layers):
-            layers.append(nn.Linear(input_dim, config.hidden_dim))
+        for h_dim in layer_sizes:
+            layers.append(nn.Linear(input_dim, h_dim))
             layers.append(nn.ReLU())
-            input_dim = config.hidden_dim
+            input_dim = h_dim
 
         self.feature_extractor = nn.Sequential(*layers)
 
         # Output heads
-        # PG head: [hidden_dim -> n_gen]
-        self.pg_head = nn.Linear(config.hidden_dim, config.n_gen)
+        # PG head: [last_hidden_dim -> n_gen]
+        self.pg_head = nn.Linear(input_dim, config.n_gen)
 
-        # VG head: [hidden_dim -> n_gen]
-        self.vg_head = nn.Linear(config.hidden_dim, config.n_gen)
+        # VG head: [last_hidden_dim -> n_gen]
+        self.vg_head = nn.Linear(input_dim, config.n_gen)
 
-        # V_all head: [hidden_dim -> n_bus * 2] (e, f)
-        self.v_all_head = nn.Linear(config.hidden_dim, config.n_bus * 2)
+        # V_all head: [last_hidden_dim -> n_bus * 2] (e, f)
+        self.v_all_head = nn.Linear(input_dim, config.n_bus * 2)
 
     def forward(self, x):
         """
