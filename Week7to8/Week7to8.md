@@ -84,7 +84,44 @@ This report consolidates the evaluation of **Model 01 (GCNN)** and **Model 03 (D
 *   **Light v5 (512n 4c)**: Reducing channels/iterations to 4 while keeping 512 neurons resulted in good seen performance (95.57%) but very poor unseen performance (R² = -2.30), similar to Light v4. This confirms that simply having more neurons (512 vs 256) does not help generalization if the feature construction (4 iterations) is insufficient or biased.
 *   **01 Node-Wise (New)**: This architecture achieved the **highest parameter efficiency** (5,668 params) and excellent accuracy on seen data (VG R² 0.999). However, it failed to generalize to unseen topologies (PG R² -5.24). Interestingly, it achieved a **VG R² of 0.65** on unseen data (not shown in table), indicating it successfully propagated some voltage physics through the new graph structure, whereas the PG prediction (which depends on global cost optimization) failed. The "blind" MLP (03 Tiny) outperformed it on PG because the N-1 optimal dispatch is statistically close to the base case, allowing the MLP to "guess" correctly by ignoring the topology change, whereas the GCNN attempted to adjust based on the topology but lacked the training diversity to do so correctly.
 
-## 3. Usage Reminder
+## 3. Case 39 (IEEE 39-bus) Investigation
+
+### A. Experiment: Strict Reproduction
+We attempted to reproduce the results on the larger IEEE 39-bus system using the "Strict Reproduction" configuration (Batch Size 10, Weight Decay 0, 2-Phase Training).
+
+*   **Objective**: Verify if the GCNN architecture scales to larger, more complex grids.
+*   **Result**: The model failed to generalize.
+    *   **Training Loss**: ~0.0012 (Supervised) - Extremely low, indicating perfect memorization.
+    *   **Validation Loss**: ~0.04 - 0.08 - High, indicating poor generalization.
+    *   **Physics Loss**: ~4.65 - Constant throughout training.
+
+### B. Root Cause Analysis: The "Detached Physics" Bug
+Comparing the training logs of the successful Case 6 run vs. the failed Case 39 run revealed a critical anomaly:
+
+| Metric | Legacy Success (Case 6) | Strict Repro (Case 39) | Interpretation |
+| :--- | :--- | :--- | :--- |
+| **PG Accuracy (< 1 MW)** | **98.58%** | **50.16%** | Huge drop in performance; Case 39 model fails strict threshold. |
+| **Final Train Sup. Loss** | `0.0055` | `0.0012` | Case 39 model overfitted more severely than Case 6. |
+| **Physics Loss Trend** | **Flat** (~1.08) | **Flat** (~4.65) | **CRITICAL**: Physics loss never decreased in either case. |
+
+**Code Inspection**:
+Inspection of `train.py` revealed that the physics loss was being **detached** from the computational graph before being added to the total loss:
+```python
+# train.py (Bug)
+phys_loss_total += loss_p.item()  # .item() detaches gradient
+# ...
+loss = sup_loss + kappa * torch.tensor(phys_loss, device=device) # New tensor, no gradient history
+```
+
+**Implication**:
+*   The "Physics-Guided" GCNN has effectively been running as a **Standard Supervised GCNN**.
+*   **Why Case 6 worked**: The system is small (6 buses, 3 gens). The model could learn the mapping purely from labels (Supervised) without needing physics constraints to regularize it.
+*   **Why Case 39 failed**: The system is larger and more complex. Pure supervised learning on the limited dataset led to severe overfitting (memorization) without learning the underlying physical laws. The model produced physically invalid solutions (Phys Loss 4.65) on unseen data.
+
+### C. Next Steps
+We must fix the `train.py` script to correctly accumulate the physics loss tensors (preserving gradient history). This will enable the model to actually learn from the physics constraints, acting as a regularizer to prevent the overfitting observed in Case 39.
+
+## 4. Usage Reminder
 
 For full reproduction steps and detailed documentation, refer to `gcnn_opf_01/docs/gcnn_opf_01.md`.
 
