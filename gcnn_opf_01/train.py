@@ -295,9 +295,11 @@ def train_epoch(
             phys_loss_tensor = phys_loss_accum / e_0_k.size(0)  # Average tensor
             phys_loss = phys_loss_tensor.item()  # For logging
 
+            # FIX: Use phys_loss_tensor (with gradients) instead of creating new tensor from float
             loss = sup_loss + kappa * phys_loss_tensor
         else:
             phys_loss = 0.0
+            loss = sup_loss
             loss = sup_loss
 
         # Backward pass
