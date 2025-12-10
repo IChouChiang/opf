@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 from dataset_03 import OPFDataset03
 from model_03 import AdmittanceDNN
 from config_03 import ModelConfig
+from loss_model_03 import correlative_loss_pg, build_A_g2b
 
 
 def parse_args():
@@ -150,17 +151,27 @@ def compute_metrics(predictions, labels):
     }
 
 
-def evaluate_model(model, test_loader, device):
+def evaluate_model(model, test_loader, device, dataset):
     """Run evaluation on test set."""
     model.eval()
 
     all_predictions = []
     all_labels = []
+    total_phys_loss = 0.0
+    n_batches = 0
+
+    # Build A_g2b from dataset
+    # Assuming single topology or consistent gen-bus mapping
+    # dataset.gen_bus_map is [N_GEN]
+    n_bus = dataset.pd.shape[1]
+    gen_bus = dataset.gen_bus_map.tolist()
+    A_g2b = build_A_g2b(n_bus, gen_bus).to(device)
 
     with torch.no_grad():
         for batch in test_loader:
             input_vec = batch["input"].to(device)
             gen_labels = batch["gen_label"].to(device)
+            pd = batch["pd"].to(device)
 
             # Forward pass
             gen_out, v_out = model(input_vec)
@@ -169,11 +180,45 @@ def evaluate_model(model, test_loader, device):
             all_predictions.append(gen_out.cpu().numpy())
             all_labels.append(gen_labels.cpu().numpy())
 
+            # Calculate Physics Loss
+            batch_size = input_vec.size(0)
+            ops = batch["operators"]
+            batch_phys_loss = 0.0
+
+            for i in range(batch_size):
+                # Reconstruct G, B for this sample
+                g_ndiag = ops["g_ndiag"][i].to(device)
+                b_ndiag = ops["b_ndiag"][i].to(device)
+                g_diag = ops["g_diag"][i].to(device)
+                b_diag = ops["b_diag"][i].to(device)
+
+                G = g_ndiag + torch.diag(g_diag)
+                B = b_ndiag + torch.diag(b_diag)
+
+                # We only care about loss_pg (the 3rd return value)
+                _, _, loss_p = correlative_loss_pg(
+                    gen_out[i],
+                    v_out[i],
+                    batch["pg_label"][i].to(device),
+                    batch["vg_label"][i].to(device),
+                    pd[i],
+                    G,
+                    B,
+                    A_g2b,
+                    kappa=0.0,  # Kappa doesn't matter for loss_p return value
+                )
+                batch_phys_loss += loss_p.item()
+
+            total_phys_loss += batch_phys_loss / batch_size
+            n_batches += 1
+
     # Concatenate all batches
     predictions = np.concatenate(all_predictions, axis=0)  # [N_test, N_GEN, 2]
     labels = np.concatenate(all_labels, axis=0)
 
-    return predictions, labels
+    avg_phys_loss = total_phys_loss / n_batches if n_batches > 0 else 0.0
+
+    return predictions, labels, avg_phys_loss
 
 
 def main():
@@ -250,10 +295,13 @@ def main():
 
     # Evaluate
     print("\nRunning evaluation...")
-    predictions, labels = evaluate_model(model, test_loader, device)
+    predictions, labels, avg_phys_loss = evaluate_model(
+        model, test_loader, device, test_dataset
+    )
 
     print(f"Predictions shape: {predictions.shape}")
     print(f"Labels shape: {labels.shape}")
+    print(f"Average Physics Loss (L_pg): {avg_phys_loss:.6f}")
 
     # Denormalize if needed
     if test_dataset.norm_stats is not None:
