@@ -24,8 +24,13 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
   - **Unseen Data:** Successfully predicted Voltage physics (VG R² 0.65) but failed on Active Power (PG) due to the global nature of cost optimization.
 
 ### Configuration System
-- Moved hardcoded parameters to JSON config files in `gcnn_opf_01/configs/`.
-- New parameter `model_type`: `"flattened"` (original) or `"nodewise"` (new).
+- **Legacy:** JSON config files in `gcnn_opf_01/configs/` with `model_type`: `"flattened"` (original) or `"nodewise"` (new).
+- **Hydra Integration:** Unified configuration system in `configs/` directory:
+  - `config.yaml` - Main configuration file
+  - `model/` - Model-specific configurations (DNN, GCNN)
+  - `data/` - Dataset configurations (case6, case39)
+  - Command-line overrides: `python scripts/train.py model=dnn data=case39 train.max_epochs=50`
+  - Test: `python tests/test_hydra_train.py` - Verifies Hydra configuration system integration
 
 ### Unified Model Refactoring (Dec 2025)
 - **New Package:** `src/deep_opf/` - Unified deep learning framework for OPF
@@ -35,11 +40,14 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 - **Data Loading:** 
   - `OPFDataset`: Unified PyTorch Dataset supporting 'flat' and 'graph' feature types
   - `OPFDataModule`: PyTorch Lightning DataModule for streamlined training
-- **Verification:** `tests/verify_models.py` - Comprehensive model validation script
+- **Configuration:** 
+  - `configs/` - Hydra configuration system for model/data/training parameters
+  - `scripts/train.py` - Unified training script with Hydra integration
+- **Verification:** 
+  - `tests/verify_models.py` - Comprehensive model validation script
+  - `tests/test_hydra_train.py` - Hydra configuration system integration test
 
 ---
-
-## 📁 Project Structure
 
 ## 📁 Project Structure
 
@@ -201,6 +209,9 @@ python tests/test_sample_generator.py      # �?3 scenarios, 30% RES, all optim
 
 # Topology verification
 python tests/test_topology_outages.py      # �?N-1 contingencies verified
+
+# Hydra configuration system integration test
+python tests/test_hydra_train.py           # �?Verifies Hydra configuration for DNN and GCNN models
 ```
 
 ### Status (Completed 2025-11-25)

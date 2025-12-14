@@ -41,12 +41,15 @@ class OPFDataModule(pl.LightningDataModule):
         feature_params: dict | None = None,
         pin_memory: bool = True,
         persistent_workers: bool = False,
+        train_file: str = "samples_train.npz",
+        val_file: str = "samples_test.npz",
+        test_file: str | None = None,
     ):
         """
         Args:
             data_dir: Directory containing:
-                - samples_train.npz
-                - samples_eval.npz (or samples_test.npz)
+                - samples_train.npz (or custom train_file)
+                - samples_eval.npz (or custom val_file)
                 - topology_operators.npz
                 - norm_stats.npz (optional)
             batch_size: Batch size for dataloaders
@@ -57,6 +60,9 @@ class OPFDataModule(pl.LightningDataModule):
                 - For 'graph': {'feature_iterations': int}
             pin_memory: Pin memory for faster GPU transfer
             persistent_workers: Keep workers alive between epochs (requires num_workers > 0)
+            train_file: Filename for training data (default: samples_train.npz)
+            val_file: Filename for validation data (default: samples_test.npz)
+            test_file: Filename for test data (optional)
         """
         super().__init__()
         self.data_dir = Path(data_dir)
@@ -67,6 +73,9 @@ class OPFDataModule(pl.LightningDataModule):
         self.feature_params = feature_params or {}
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers and num_workers > 0
+        self.train_file = train_file
+        self.val_file = val_file
+        self.test_file = test_file
 
         # Will be set in setup()
         self.train_dataset: OPFDataset | None = None
@@ -94,7 +103,7 @@ class OPFDataModule(pl.LightningDataModule):
 
         if stage == "fit" or stage is None:
             # Training dataset
-            train_path = self.data_dir / "samples_train.npz"
+            train_path = self.data_dir / self.train_file
             if not train_path.exists():
                 raise FileNotFoundError(f"Training data not found: {train_path}")
 
@@ -108,14 +117,10 @@ class OPFDataModule(pl.LightningDataModule):
                 feature_params=self.feature_params,
             )
 
-            # Validation dataset (try samples_eval.npz first, then samples_test.npz)
-            val_path = self.data_dir / "samples_eval.npz"
+            # Validation dataset
+            val_path = self.data_dir / self.val_file
             if not val_path.exists():
-                val_path = self.data_dir / "samples_test.npz"
-            if not val_path.exists():
-                raise FileNotFoundError(
-                    f"Validation data not found: tried samples_eval.npz and samples_test.npz in {self.data_dir}"
-                )
+                raise FileNotFoundError(f"Validation data not found: {val_path}")
 
             self.val_dataset = OPFDataset(
                 data_path=val_path,
@@ -129,13 +134,9 @@ class OPFDataModule(pl.LightningDataModule):
 
         if stage == "validate":
             # Only validation dataset
-            val_path = self.data_dir / "samples_eval.npz"
+            val_path = self.data_dir / self.val_file
             if not val_path.exists():
-                val_path = self.data_dir / "samples_test.npz"
-            if not val_path.exists():
-                raise FileNotFoundError(
-                    f"Validation data not found: tried samples_eval.npz and samples_test.npz in {self.data_dir}"
-                )
+                raise FileNotFoundError(f"Validation data not found: {val_path}")
 
             self.val_dataset = OPFDataset(
                 data_path=val_path,
@@ -148,14 +149,15 @@ class OPFDataModule(pl.LightningDataModule):
             )
 
         if stage == "test":
-            # Test dataset (same as validation for now)
-            test_path = self.data_dir / "samples_test.npz"
+            # Test dataset
+            if self.test_file:
+                test_path = self.data_dir / self.test_file
+            else:
+                # Fall back to validation file
+                test_path = self.data_dir / self.val_file
+            
             if not test_path.exists():
-                test_path = self.data_dir / "samples_eval.npz"
-            if not test_path.exists():
-                raise FileNotFoundError(
-                    f"Test data not found: tried samples_test.npz and samples_eval.npz in {self.data_dir}"
-                )
+                raise FileNotFoundError(f"Test data not found: {test_path}")
 
             self.val_dataset = OPFDataset(
                 data_path=test_path,

@@ -1,0 +1,16 @@
+# Configuration for AdmittanceDNN model
+# @package model
+
+name: dnn
+
+# Model architecture (AdmittanceDNN)
+architecture:
+  hidden_dim: 256
+  num_layers: 3
+  dropout: 0.1
+
+# Task settings (OPFTask)
+task:
+  lr: 1.0e-3
+  kappa: 0.1
+  weight_decay: 1.0e-4

@@ -1,0 +1,25 @@
+# Configuration for Case6 dataset
+# @package data
+
+name: case6
+
+# Power system topology
+n_bus: 6
+n_gen: 3
+
+# Generator bus indices (0-indexed)
+gen_bus_indices: [0, 1, 2]
+
+# Data paths (relative to project root)
+data_dir: legacy/gcnn_opf_01/data_matlab_npz
+train_file: samples_train.npz
+val_file: samples_test.npz
+test_file: samples_unseen.npz
+
+# Feature type: 'flat' for DNN, 'graph' for GCNN
+# This will be overridden based on model selection
+feature_type: flat
+
+# DataLoader settings
+num_workers: 4
+pin_memory: true

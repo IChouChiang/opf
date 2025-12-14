@@ -1,0 +1,44 @@
+# @package _global_
+# Main configuration file for deep_opf training
+# Uses Hydra for configuration management
+
+defaults:
+  - model: dnn
+  - data: case6
+  - _self_
+
+# Global settings
+seed: 42
+
+# Training settings
+train:
+  max_epochs: 50
+  batch_size: 32
+  num_workers: 4
+  accelerator: auto  # auto, cpu, gpu, mps
+  devices: 1
+  precision: 32  # 16, 32, bf16
+  gradient_clip_val: null
+  accumulate_grad_batches: 1
+
+# Logging and checkpointing
+logging:
+  project_name: deep_opf
+  run_name: null  # auto-generated if null
+  log_every_n_steps: 10
+
+checkpoint:
+  monitor: val/loss
+  mode: min
+  save_top_k: 3
+  save_last: true
+
+# Early stopping
+early_stopping:
+  enabled: true
+  monitor: val/loss
+  patience: 10
+  mode: min
+
+# Output directory (relative to project root)
+output_dir: outputs

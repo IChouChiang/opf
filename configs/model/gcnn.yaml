@@ -1,0 +1,19 @@
+# Configuration for GCNN model
+# @package model
+
+name: gcnn
+
+# Model architecture (GCNN)
+architecture:
+  in_channels: 10  # e_0_k and f_0_k each have 10 channels (k=0..9 iterations)
+  hidden_channels: 8
+  n_layers: 2
+  fc_hidden_dim: 256
+  n_fc_layers: 1
+  dropout: 0.0
+
+# Task settings (OPFTask)
+task:
+  lr: 1.0e-3
+  kappa: 0.1
+  weight_decay: 1.0e-4
