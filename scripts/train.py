@@ -57,9 +57,11 @@ def instantiate_model(cfg: DictConfig, n_bus: int, n_gen: int) -> pl.LightningMo
             n_bus=n_bus,
             dropout=cfg.model.architecture.dropout,
         )
-        print(f"Instantiated AdmittanceDNN: input_dim={input_dim}, "
-              f"hidden_dim={cfg.model.architecture.hidden_dim}, "
-              f"num_layers={cfg.model.architecture.num_layers}")
+        print(
+            f"Instantiated AdmittanceDNN: input_dim={input_dim}, "
+            f"hidden_dim={cfg.model.architecture.hidden_dim}, "
+            f"num_layers={cfg.model.architecture.num_layers}"
+        )
 
     elif model_name == "gcnn":
         model = GCNN(
@@ -72,9 +74,11 @@ def instantiate_model(cfg: DictConfig, n_bus: int, n_gen: int) -> pl.LightningMo
             n_fc_layers=cfg.model.architecture.n_fc_layers,
             dropout=cfg.model.architecture.dropout,
         )
-        print(f"Instantiated GCNN: n_bus={n_bus}, n_gen={n_gen}, "
-              f"in_channels={cfg.model.architecture.in_channels}, "
-              f"hidden_channels={cfg.model.architecture.hidden_channels}")
+        print(
+            f"Instantiated GCNN: n_bus={n_bus}, n_gen={n_gen}, "
+            f"in_channels={cfg.model.architecture.in_channels}, "
+            f"hidden_channels={cfg.model.architecture.hidden_channels}"
+        )
 
     else:
         raise ValueError(f"Unknown model name: {model_name}. Expected 'dnn' or 'gcnn'.")
@@ -96,8 +100,8 @@ def instantiate_datamodule(cfg: DictConfig) -> OPFDataModule:
     original_cwd = Path(hydra.utils.get_original_cwd())
     data_dir = original_cwd / cfg.data.data_dir
 
-    # Determine feature type based on model
-    feature_type = "graph" if cfg.model.name == "gcnn" else "flat"
+    # Feature type from resolved config (interpolation: ${model.feature_type})
+    feature_type = cfg.data.feature_type
 
     datamodule = OPFDataModule(
         data_dir=str(data_dir),
@@ -105,13 +109,15 @@ def instantiate_datamodule(cfg: DictConfig) -> OPFDataModule:
         val_file=cfg.data.val_file,
         test_file=cfg.data.get("test_file"),
         batch_size=cfg.train.batch_size,
-        num_workers=cfg.train.num_workers,
+        num_workers=cfg.train.get("num_workers", 4),
         feature_type=feature_type,
         pin_memory=cfg.data.get("pin_memory", True),
     )
 
-    print(f"Instantiated OPFDataModule: data_dir={data_dir}, "
-          f"feature_type={feature_type}, batch_size={cfg.train.batch_size}")
+    print(
+        f"Instantiated OPFDataModule: data_dir={data_dir}, "
+        f"feature_type={feature_type}, batch_size={cfg.train.batch_size}"
+    )
 
     return datamodule
 
@@ -143,8 +149,10 @@ def instantiate_task(
         n_bus=n_bus,
     )
 
-    print(f"Instantiated OPFTask: lr={cfg.model.task.lr}, "
-          f"kappa={cfg.model.task.kappa}, weight_decay={cfg.model.task.weight_decay}")
+    print(
+        f"Instantiated OPFTask: lr={cfg.model.task.lr}, "
+        f"kappa={cfg.model.task.kappa}, weight_decay={cfg.model.task.weight_decay}"
+    )
 
     return task
 
@@ -171,20 +179,25 @@ def setup_callbacks(cfg: DictConfig) -> list:
         verbose=True,
     )
     callbacks.append(checkpoint_callback)
-    print(f"Added ModelCheckpoint: monitor={cfg.checkpoint.monitor}, "
-          f"save_top_k={cfg.checkpoint.save_top_k}")
+    print(
+        f"Added ModelCheckpoint: monitor={cfg.checkpoint.monitor}, "
+        f"save_top_k={cfg.checkpoint.save_top_k}"
+    )
 
-    # Early stopping
+    # Early stopping (use train.patience if available, else early_stopping.patience)
     if cfg.early_stopping.enabled:
+        patience = cfg.train.get("patience", cfg.early_stopping.patience)
         early_stop_callback = EarlyStopping(
             monitor=cfg.early_stopping.monitor,
-            patience=cfg.early_stopping.patience,
+            patience=patience,
             mode=cfg.early_stopping.mode,
             verbose=True,
         )
         callbacks.append(early_stop_callback)
-        print(f"Added EarlyStopping: monitor={cfg.early_stopping.monitor}, "
-              f"patience={cfg.early_stopping.patience}")
+        print(
+            f"Added EarlyStopping: monitor={cfg.early_stopping.monitor}, "
+            f"patience={patience}"
+        )
 
     return callbacks
 
@@ -239,8 +252,10 @@ def main(cfg: DictConfig) -> None:
         deterministic=True,
     )
 
-    print(f"Trainer: max_epochs={cfg.train.max_epochs}, "
-          f"accelerator={cfg.train.accelerator}, devices={cfg.train.devices}")
+    print(
+        f"Trainer: max_epochs={cfg.train.max_epochs}, "
+        f"accelerator={cfg.train.accelerator}, devices={cfg.train.devices}"
+    )
 
     # Train
     print("\n" + "=" * 60)

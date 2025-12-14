@@ -2,10 +2,13 @@
 # @package model
 
 name: dnn
+feature_type: flat  # Used by data config via interpolation
 
 # Model architecture (AdmittanceDNN)
+# input_dim is computed automatically: 2*n_bus + 2*n_bus^2
+# For Case6: 2*6 + 2*36 = 84
 architecture:
-  hidden_dim: 256
+  hidden_dim: 64
   num_layers: 3
   dropout: 0.1
 

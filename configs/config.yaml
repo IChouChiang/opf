@@ -3,23 +3,13 @@
 # Uses Hydra for configuration management
 
 defaults:
-  - model: dnn
-  - data: case6
+  - data: case39
+  - model: gcnn
+  - train: default
   - _self_
 
 # Global settings
 seed: 42
-
-# Training settings
-train:
-  max_epochs: 50
-  batch_size: 32
-  num_workers: 4
-  accelerator: auto  # auto, cpu, gpu, mps
-  devices: 1
-  precision: 32  # 16, 32, bf16
-  gradient_clip_val: null
-  accumulate_grad_batches: 1
 
 # Logging and checkpointing
 logging:
@@ -30,7 +20,7 @@ logging:
 checkpoint:
   monitor: val/loss
   mode: min
-  save_top_k: 3
+  save_top_k: 1
   save_last: true
 
 # Early stopping

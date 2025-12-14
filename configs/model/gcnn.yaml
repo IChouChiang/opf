@@ -2,11 +2,12 @@
 # @package model
 
 name: gcnn
+feature_type: graph  # Used by data config via interpolation
 
 # Model architecture (GCNN)
 architecture:
   in_channels: 10  # e_0_k and f_0_k each have 10 channels (k=0..9 iterations)
-  hidden_channels: 8
+  hidden_channels: 16
   n_layers: 2
   fc_hidden_dim: 256
   n_fc_layers: 1

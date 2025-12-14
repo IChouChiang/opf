@@ -16,9 +16,9 @@ train_file: samples_train.npz
 val_file: samples_test.npz
 test_file: samples_unseen.npz
 
-# Feature type: 'flat' for DNN, 'graph' for GCNN
-feature_type: flat
+# Feature type: interpolated from model config
+# 'flat' for DNN, 'graph' for GCNN
+feature_type: ${model.feature_type}
 
 # DataLoader settings
-num_workers: 4
 pin_memory: true

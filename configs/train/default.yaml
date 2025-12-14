@@ -1,0 +1,14 @@
+# Default training configuration
+# @package train
+
+max_epochs: 50
+batch_size: 32
+num_workers: 4
+accelerator: auto  # auto, cpu, gpu, mps
+devices: 1
+precision: 32  # 16, 32, bf16
+gradient_clip_val: null
+accumulate_grad_batches: 1
+
+# Early stopping
+patience: 10
