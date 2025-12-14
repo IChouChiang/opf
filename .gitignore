@@ -210,15 +210,10 @@ out/
 next-env.d.ts
 
 # ============================================================================
-# LOCAL-ONLY TRACKING (tracked locally but blocked from push via pre-push hook)
+# TRAINING ARTIFACTS (always ignored - reproducible from code + data)
 # ============================================================================
-# These are tracked locally with 'git add -f' but the pre-push hook
-# prevents them from being pushed to remote.
-# To track locally: git add -f lightning_logs/ outputs/
-# ============================================================================
-
 # PyTorch Lightning training logs and checkpoints
-# lightning_logs/
+lightning_logs/
 
-# Hydra output directories
-# outputs/
+# Hydra output directories (timestamped runs)
+outputs/
