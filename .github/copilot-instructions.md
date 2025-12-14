@@ -52,7 +52,7 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 ## Development Workflows
 
 ### Environment Setup
-- **Conda environment:** `opf311` (shared across devices)
+- **Conda environment:** `opf311`, please always `conda activate opf311` if you found missing packages.
 - **Python executable:** `E:\DevTools\anaconda3\envs\opf311\python.exe` (Windows/Alyce)
 - Recreate via: `conda env create -f envs/environment.yml`
 - **Key packages:** pyomo, pypower, torch, gurobipy, numpy, matplotlib
@@ -232,6 +232,7 @@ c = c0                   # constant term
 
 ## Git Commit Message Convention
 
+Never commit anything without verification or permission. 
 Follow **Conventional Commits** style with prefixes:
 
 - `feat:` New feature or functionality (e.g., "feat: add AC-OPF Cartesian voltage formulation")
