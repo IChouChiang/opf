@@ -4,17 +4,17 @@
 name: gcnn
 feature_type: graph  # Used by data config via interpolation
 
-# Model architecture (GCNN)
+# Model architecture (GCNN) - Matches exp_final_1000n.json (97%+ accuracy on Case 6)
 architecture:
-  in_channels: 10  # e_0_k and f_0_k each have 10 channels (k=0..9 iterations)
-  hidden_channels: 16
-  n_layers: 2
-  fc_hidden_dim: 256
-  n_fc_layers: 1
+  in_channels: 8  # Must match feature_iterations in Case 6 data (k=8)
+  hidden_channels: 8  # Output channels of GraphConv layers
+  n_layers: 2  # Number of GraphConv layers
+  fc_hidden_dim: 1000  # 1000 neurons for ~115K params (01 Final config)
+  n_fc_layers: 1  # Number of FC layers before heads
   dropout: 0.0
 
 # Task settings (OPFTask)
 task:
-  lr: 1.0e-3
-  kappa: 0.1
-  weight_decay: 1.0e-4
+  lr: ${train.lr}
+  kappa: 0.1  # Physics loss weight
+  weight_decay: 0.0  # Legacy uses 0

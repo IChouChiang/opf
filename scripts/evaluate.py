@@ -1,19 +1,23 @@
 """Evaluation script for deep_opf models using Hydra configuration.
 
-Implements metrics from Gao et al. paper:
-- Probabilistic Accuracy (Pacc): % of samples within threshold
-  - PG: |pred - true| < 1.0 MW (threshold from paper Section V-A)
+Implements metrics from Gao et al. paper (IEEE Trans. Power Systems, 2024):
+- Probabilistic Accuracy (Pacc, Eq. 37): % of samples within threshold
+  - PG: |pred - true| < 0.01 p.u. (i.e., 1 MW assuming BaseMVA=100)
   - VG: |pred - true| < 0.001 p.u.
-- Standard metrics: R², RMSE, MAE
-- Physics violation: Mean active power mismatch
+- Standard metrics: R^2, RMSE, MAE (on denormalized p.u. values)
+- Physics violation: Mean active power mismatch (Eq. 8)
 
 CRITICAL: Model outputs are Z-score normalized. Must denormalize before metrics.
 
 Usage:
-    python scripts/evaluate.py model=gcnn data=case39 checkpoint=/path/to/best.ckpt
+    # Evaluate with specific checkpoint
+    python scripts/evaluate.py ckpt_path=/path/to/model.ckpt
 
-    # Or use the best checkpoint from a training run
-    python scripts/evaluate.py model=gcnn data=case39 checkpoint=outputs/2024-01-01/checkpoints/best.ckpt
+    # Auto-find best checkpoint in outputs/
+    python scripts/evaluate.py
+
+    # Override data/model config
+    python scripts/evaluate.py model=gcnn data=case39 ckpt_path=best
 """
 
 import sys
@@ -36,487 +40,21 @@ from deep_opf.models import GCNN, AdmittanceDNN
 from deep_opf.task import OPFTask
 
 
-# Constants from paper
+# =============================================================================
+# Constants (from Gao et al. paper Section V-A)
+# =============================================================================
 BASE_MVA = 100.0  # Standard base power for p.u. conversion
-PG_THRESHOLD_MW = 1.0  # Threshold for PG probabilistic accuracy (MW)
-VG_THRESHOLD_PU = 0.001  # Threshold for VG probabilistic accuracy (p.u.)
-
-
-def denormalize(values: np.ndarray, mean: float, std: float) -> np.ndarray:
-    """
-    Denormalize Z-score normalized values back to original scale.
-
-    Formula: y_original = y_normalized * std + mean
-
-    If std == 0, returns values + mean (per paper Eq. 36).
-
-    Args:
-        values: Normalized values
-        mean: Mean used for normalization
-        std: Standard deviation used for normalization
-
-    Returns:
-        Denormalized values in original scale (p.u.)
-    """
-    if std == 0 or std < 1e-10:
-        return values + mean
-    return values * std + mean
-
-
-def probabilistic_accuracy(
-    pred: np.ndarray, true: np.ndarray, threshold: float
-) -> float:
-    """
-    Compute probabilistic accuracy (Eq. 37 from paper).
-
-    p = P(|T - T_hat| < threshold)
-
-    Args:
-        pred: Predicted values
-        true: True values
-        threshold: Acceptance threshold
-
-    Returns:
-        Percentage of samples within threshold (0-100)
-    """
-    errors = np.abs(pred - true)
-    within_threshold = np.sum(errors < threshold)
-    total = errors.size
-    return float((within_threshold / total) * 100.0)
-
-
-def compute_metrics(pred: np.ndarray, true: np.ndarray, name: str) -> dict[str, float]:
-    """
-    Compute standard regression metrics.
-
-    Args:
-        pred: Predicted values (flattened)
-        true: True values (flattened)
-        name: Variable name for logging
-
-    Returns:
-        Dict with R², RMSE, MAE
-    """
-    pred_flat = pred.flatten()
-    true_flat = true.flatten()
-
-    r2 = r2_score(true_flat, pred_flat)
-    rmse = np.sqrt(mean_squared_error(true_flat, pred_flat))
-    mae = mean_absolute_error(true_flat, pred_flat)
-
-    return {
-        f"{name}_R2": r2,
-        f"{name}_RMSE_pu": rmse,
-        f"{name}_MAE_pu": mae,
-    }
-
-
-def compute_physics_violation(
-    pg_pred: torch.Tensor,
-    v_bus_pred: torch.Tensor,
-    pd: torch.Tensor,
-    qd: torch.Tensor,
-    G: torch.Tensor,
-    B: torch.Tensor,
-    gen_bus_matrix: torch.Tensor,
-) -> float:
-    """
-    Compute mean physics violation (active power mismatch).
-
-    Uses physics_loss to compute MSE between predicted PG and
-    PG calculated from predicted voltage via power flow equations.
-
-    Args:
-        pg_pred: Predicted PG [N_samples, n_gen] in p.u.
-        v_bus_pred: Predicted bus voltages [N_samples, n_bus, 2] in p.u.
-        pd, qd: Power demands [N_samples, n_bus] in p.u.
-        G, B: Admittance matrices [n_bus, n_bus]
-        gen_bus_matrix: Generator-bus incidence [n_bus, n_gen]
-
-    Returns:
-        Mean physics violation in MW (sqrt(MSE) * BASE_MVA)
-    """
-    with torch.no_grad():
-        result = physics_loss(
-            pg=pg_pred,
-            v_bus=v_bus_pred,
-            pd=pd,
-            qd=qd,
-            G=G,
-            B=B,
-            gen_bus_matrix=gen_bus_matrix,
-            include_reactive=False,
-        )
-        # Convert MSE to RMSE in MW
-        mse_pu = result["loss_p"].item()
-        rmse_pu = np.sqrt(mse_pu)
-        rmse_mw = rmse_pu * BASE_MVA
-
-    return rmse_mw
-
-
-def load_checkpoint(checkpoint_path: str, task: OPFTask) -> OPFTask:
-    """Load model weights from checkpoint."""
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    task.load_state_dict(checkpoint["state_dict"])
-    return task
-
-
-def run_inference(
-    task: OPFTask,
-    datamodule: OPFDataModule,
-    device: torch.device,
-) -> tuple[dict, dict, dict]:
-    """
-    Run inference on test set and collect predictions.
-
-    Returns:
-        Tuple of (predictions, labels, batch_data) dicts
-    """
-    task.eval()
-    task.to(device)
-
-    all_pg_pred = []
-    all_vg_pred = []
-    all_v_bus_pred = []
-    all_pg_label = []
-    all_vg_label = []
-    all_pd = []
-    all_qd = []
-    all_operators = []
-
-    # Setup datamodule for training first (to get norm_stats), then test
-    datamodule.setup(stage="fit")  # Load norm_stats from training data
-    datamodule.setup(stage="test")  # Load test data
-    dataloader = datamodule.test_dataloader()
-
-    with torch.no_grad():
-        for batch in dataloader:
-            # Move batch to device
-            batch = {
-                k: v.to(device) if isinstance(v, torch.Tensor) else v
-                for k, v in batch.items()
-            }
-            if "operators" in batch and isinstance(batch["operators"], dict):
-                batch["operators"] = {
-                    k: v.to(device) if isinstance(v, torch.Tensor) else v
-                    for k, v in batch["operators"].items()
-                }
-
-            # Forward pass
-            preds = task._forward(batch)
-
-            # Collect predictions
-            all_pg_pred.append(preds["pg"].cpu())
-            all_vg_pred.append(preds["vg"].cpu())
-            all_v_bus_pred.append(preds["v_bus"].cpu())
-
-            # Collect labels
-            all_pg_label.append(batch["pg_label"].cpu())  # type: ignore[union-attr]
-            all_vg_label.append(batch["vg_label"].cpu())  # type: ignore[union-attr]
-
-            # Collect batch data for physics loss
-            all_pd.append(batch["pd"].cpu())  # type: ignore[union-attr]
-            all_qd.append(batch["qd"].cpu())  # type: ignore[union-attr]
-            if "operators" in batch and isinstance(batch["operators"], dict):
-                all_operators.append(
-                    {k: v.cpu() for k, v in batch["operators"].items()}
-                )
-
-    # Concatenate all batches
-    predictions = {
-        "pg": torch.cat(all_pg_pred, dim=0),
-        "vg": torch.cat(all_vg_pred, dim=0),
-        "v_bus": torch.cat(all_v_bus_pred, dim=0),
-    }
-    labels = {
-        "pg": torch.cat(all_pg_label, dim=0),
-        "vg": torch.cat(all_vg_label, dim=0),
-    }
-    batch_data = {
-        "pd": torch.cat(all_pd, dim=0),
-        "qd": torch.cat(all_qd, dim=0),
-    }
-
-    # Stack operators (use first batch's topology matrices)
-    if all_operators:
-        batch_data["operators"] = all_operators[0]
-
-    return predictions, labels, batch_data
-
-
-def evaluate_model(
-    predictions: dict,
-    labels: dict,
-    batch_data: dict,
-    norm_stats: dict | None,
-    gen_bus_indices: list[int],
-    n_bus: int,
-) -> dict[str, float]:
-    """
-    Evaluate model predictions with denormalization.
-
-    Args:
-        predictions: Dict with pg, vg, v_bus tensors
-        labels: Dict with pg, vg tensors
-        batch_data: Dict with pd, qd, operators
-        norm_stats: Normalization statistics (mean, std for each variable)
-        gen_bus_indices: Generator bus indices
-        n_bus: Number of buses
-
-    Returns:
-        Dict with all metrics
-    """
-    metrics = {}
-
-    # Convert to numpy
-    pg_pred = predictions["pg"].numpy()
-    vg_pred = predictions["vg"].numpy()
-    v_bus_pred = predictions["v_bus"].numpy()
-    pg_label = labels["pg"].numpy()
-    vg_label = labels["vg"].numpy()
-
-    # Denormalize if norm_stats available
-    if norm_stats is not None:
-        print("\nDenormalizing predictions using norm_stats...")
-
-        # Get normalization parameters (may be torch.Tensor or scalar)
-        pg_mean = norm_stats.get("pg_mean", 0.0)
-        pg_std = norm_stats.get("pg_std", 1.0)
-        vg_mean = norm_stats.get("vg_mean", 0.0)
-        vg_std = norm_stats.get("vg_std", 1.0)
-
-        # Convert torch tensors to numpy
-        if isinstance(pg_mean, torch.Tensor):
-            pg_mean = pg_mean.numpy()
-        if isinstance(pg_std, torch.Tensor):
-            pg_std = pg_std.numpy()
-        if isinstance(vg_mean, torch.Tensor):
-            vg_mean = vg_mean.numpy()
-        if isinstance(vg_std, torch.Tensor):
-            vg_std = vg_std.numpy()
-
-        # Denormalize: y_orig = y_norm * std + mean
-        # Note: Dataset applies: y_norm = (y_orig - mean) / (std + 1e-8)
-        pg_pred_pu = pg_pred * (pg_std + 1e-8) + pg_mean
-        vg_pred_pu = vg_pred * (vg_std + 1e-8) + vg_mean
-        pg_label_pu = pg_label * (pg_std + 1e-8) + pg_mean
-        vg_label_pu = vg_label * (vg_std + 1e-8) + vg_mean
-
-        print(f"  PG: mean={pg_mean}, std={pg_std}")
-        print(f"  VG: mean={vg_mean}, std={vg_std}")
-    else:
-        print("\nNo norm_stats found. Assuming outputs are already in p.u.")
-        pg_pred_pu = pg_pred
-        vg_pred_pu = vg_pred
-        pg_label_pu = pg_label
-        vg_label_pu = vg_label
-
-    # Convert PG to MW for probabilistic accuracy
-    pg_pred_mw = pg_pred_pu * BASE_MVA
-    pg_label_mw = pg_label_pu * BASE_MVA
-
-    # =========================================================================
-    # Probabilistic Accuracy (Eq. 37 from paper)
-    # =========================================================================
-    pacc_pg = probabilistic_accuracy(pg_pred_mw, pg_label_mw, PG_THRESHOLD_MW)
-    pacc_vg = probabilistic_accuracy(vg_pred_pu, vg_label_pu, VG_THRESHOLD_PU)
-
-    metrics["Pacc_PG_%"] = pacc_pg
-    metrics["Pacc_VG_%"] = pacc_vg
-
-    # =========================================================================
-    # Standard Metrics (R², RMSE, MAE) in p.u.
-    # =========================================================================
-    pg_metrics = compute_metrics(pg_pred_pu, pg_label_pu, "PG")
-    vg_metrics = compute_metrics(vg_pred_pu, vg_label_pu, "VG")
-    metrics.update(pg_metrics)
-    metrics.update(vg_metrics)
-
-    # =========================================================================
-    # Physics Violation (Active Power Mismatch)
-    # =========================================================================
-    if "operators" in batch_data:
-        print("\nComputing physics violation...")
-
-        # Build gen-bus matrix
-        gen_bus_matrix = build_gen_bus_matrix(n_bus, gen_bus_indices)
-
-        # Get G, B matrices from operators
-        operators = batch_data["operators"]
-        if "G" in operators:
-            G = operators["G"]
-            B = operators["B"]
-        else:
-            # Reconstruct from diagonal and off-diagonal
-            g_ndiag = operators["g_ndiag"]
-            b_ndiag = operators["b_ndiag"]
-            g_diag = operators["g_diag"]
-            b_diag = operators["b_diag"]
-
-            # Handle batched (use first sample)
-            if g_ndiag.dim() == 3:
-                g_ndiag = g_ndiag[0]
-                b_ndiag = b_ndiag[0]
-                g_diag = g_diag[0]
-                b_diag = b_diag[0]
-
-            G = g_ndiag + torch.diag(g_diag)
-            B = b_ndiag + torch.diag(b_diag)
-
-        # Convert predictions back to tensors (denormalized, in p.u.)
-        pg_tensor = torch.from_numpy(pg_pred_pu).float()
-        v_bus_tensor = predictions["v_bus"]  # v_bus may not be normalized
-
-        # Compute physics violation
-        phys_violation_mw = compute_physics_violation(
-            pg_pred=pg_tensor,
-            v_bus_pred=v_bus_tensor,
-            pd=batch_data["pd"],
-            qd=batch_data["qd"],
-            G=G,
-            B=B,
-            gen_bus_matrix=gen_bus_matrix,
-        )
-        metrics["Physics_Violation_MW"] = phys_violation_mw
-    else:
-        metrics["Physics_Violation_MW"] = float("nan")
-
-    return metrics
-
-
-def print_results_table(metrics: dict, cfg: DictConfig) -> None:
-    """Print evaluation results in a formatted table."""
-    print("\n" + "=" * 70)
-    print("EVALUATION RESULTS")
-    print("=" * 70)
-    print(f"Model: {cfg.model.name}")
-    print(f"Dataset: {cfg.data.name}")
-    print("=" * 70)
-
-    # Probabilistic Accuracy Table
-    pacc_data = [
-        ["PG", f"{metrics['Pacc_PG_%']:.2f}%", f"< {PG_THRESHOLD_MW} MW"],
-        ["VG", f"{metrics['Pacc_VG_%']:.2f}%", f"< {VG_THRESHOLD_PU} p.u."],
-    ]
-    print("\n[Probabilistic Accuracy] (Paper Eq. 37):")
-    print(
-        tabulate(
-            pacc_data, headers=["Variable", "Accuracy", "Threshold"], tablefmt="grid"
-        )
-    )
-
-    # Standard Metrics Table
-    std_data = [
-        [
-            "PG",
-            f"{metrics['PG_R2']:.4f}",
-            f"{metrics['PG_RMSE_pu']:.6f}",
-            f"{metrics['PG_MAE_pu']:.6f}",
-        ],
-        [
-            "VG",
-            f"{metrics['VG_R2']:.4f}",
-            f"{metrics['VG_RMSE_pu']:.6f}",
-            f"{metrics['VG_MAE_pu']:.6f}",
-        ],
-    ]
-    print("\n[Standard Metrics] (in p.u.):")
-    print(
-        tabulate(std_data, headers=["Variable", "R^2", "RMSE", "MAE"], tablefmt="grid")
-    )
-
-    # Physics Violation
-    print("\n[Physics Consistency]:")
-    if not np.isnan(metrics.get("Physics_Violation_MW", float("nan"))):
-        print(
-            f"   Active Power Mismatch (RMSE): {metrics['Physics_Violation_MW']:.4f} MW"
-        )
-    else:
-        print("   Physics violation not computed (missing operators)")
-
-    print("\n" + "=" * 70)
-
-
-def cleanup_lightning_logs(keep_versions: int = 5) -> None:
-    """
-    Clean up old lightning_logs versions, keeping only the most recent ones.
-
-    Args:
-        keep_versions: Number of recent versions to keep
-    """
-    logs_dir = Path("lightning_logs")
-    if not logs_dir.exists():
-        return
-
-    # Get all version directories
-    versions = sorted(logs_dir.glob("version_*"), key=lambda p: p.stat().st_mtime)
-
-    # Remove old versions
-    if len(versions) > keep_versions:
-        for old_version in versions[:-keep_versions]:
-            print(f"Removing old log: {old_version}")
-            import shutil
-
-            shutil.rmtree(old_version)
-
-
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
-def main(cfg: DictConfig) -> None:
-    """
-    Main evaluation function.
-
-    Args:
-        cfg: Hydra configuration object (must include 'checkpoint' key)
-    """
-    print("=" * 70)
-    print("Model Evaluation")
-    print("=" * 70)
-    print(OmegaConf.to_yaml(cfg))
-
-    # Check for checkpoint path
-    checkpoint_path = cfg.get("checkpoint")
-    if checkpoint_path is None:
-        print("\n❌ ERROR: No checkpoint specified!")
-        print("Usage: python scripts/evaluate.py checkpoint=/path/to/model.ckpt")
-        return
-
-    # Resolve checkpoint path relative to original cwd
-    original_cwd = Path(hydra.utils.get_original_cwd())
-    checkpoint_path = original_cwd / checkpoint_path
-    if not checkpoint_path.exists():
-        print(f"\n❌ ERROR: Checkpoint not found: {checkpoint_path}")
-        return
-
-    print(f"\n[OK] Loading checkpoint: {checkpoint_path}")
-
-    # Set seed
-    pl.seed_everything(cfg.seed, workers=True)
-
-    # Extract data parameters
-    n_bus = cfg.data.n_bus
-    n_gen = cfg.data.n_gen
-    gen_bus_indices = list(cfg.data.gen_bus_indices)
-
-    # Instantiate datamodule
-    data_dir = original_cwd / cfg.data.data_dir
-    feature_type = cfg.data.feature_type
-
-    datamodule = OPFDataModule(
-        data_dir=str(data_dir),
-        train_file=cfg.data.train_file,
-        val_file=cfg.data.val_file,
-        test_file=cfg.data.get("test_file"),
-        batch_size=cfg.train.batch_size,
-        num_workers=cfg.train.get("num_workers", 0),  # Use 0 for evaluation
-        feature_type=feature_type,
-        pin_memory=False,
-    )
-
-    print(f"[OK] DataModule: {data_dir}, feature_type={feature_type}")
-
-    # Instantiate model
+PG_THRESHOLD_PU = 0.01  # 1 MW = 0.01 p.u. (assuming BaseMVA=100)
+VG_THRESHOLD_PU = 0.001  # 0.001 p.u. for voltage
+
+
+# =============================================================================
+# Model Instantiation (reused from train.py)
+# =============================================================================
+def instantiate_model(cfg: DictConfig, n_bus: int, n_gen: int):
+    """Instantiate the appropriate model based on config."""
     model_name = cfg.model.name
+
     if model_name == "dnn":
         input_dim = 2 * n_bus + 2 * (n_bus * n_bus)
         model = AdmittanceDNN(
@@ -541,10 +79,317 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
-    print(f"[OK] Model: {model_name}")
+    return model
 
-    # Create task and load checkpoint
-    task = OPFTask(
+
+# =============================================================================
+# Checkpoint Discovery
+# =============================================================================
+def find_best_checkpoint(search_dir: Path) -> Path | None:
+    """
+    Find the most recent .ckpt file in outputs/ directory.
+
+    Args:
+        search_dir: Directory to search (typically outputs/)
+
+    Returns:
+        Path to most recent checkpoint, or None if not found
+    """
+    if not search_dir.exists():
+        return None
+
+    # Find all .ckpt files recursively
+    ckpt_files = list(search_dir.rglob("*.ckpt"))
+    if not ckpt_files:
+        return None
+
+    # Sort by modification time (most recent first)
+    ckpt_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return ckpt_files[0]
+
+
+# =============================================================================
+# Denormalization
+# =============================================================================
+def denormalize_tensor(
+    values: torch.Tensor, mean: torch.Tensor, std: torch.Tensor, eps: float = 1e-8
+) -> torch.Tensor:
+    """
+    Revert Z-score normalization: y_orig = y_norm * (std + eps) + mean
+
+    Args:
+        values: Normalized tensor
+        mean: Mean used for normalization
+        std: Standard deviation used for normalization
+        eps: Small value added to std during normalization
+
+    Returns:
+        Denormalized tensor in original scale (p.u.)
+    """
+    return values * (std + eps) + mean
+
+
+# =============================================================================
+# Metrics Computation
+# =============================================================================
+def probabilistic_accuracy(
+    pred: np.ndarray, true: np.ndarray, threshold: float
+) -> float:
+    """
+    Compute probabilistic accuracy (Eq. 37 from paper).
+
+    Pacc = P(|pred - true| < threshold) * 100%
+
+    Args:
+        pred: Predicted values (any shape, will be flattened)
+        true: True values (same shape as pred)
+        threshold: Acceptance threshold in p.u.
+
+    Returns:
+        Percentage of samples within threshold (0-100)
+    """
+    errors = np.abs(pred.flatten() - true.flatten())
+    return float(np.mean(errors < threshold) * 100.0)
+
+
+def compute_regression_metrics(
+    pred: np.ndarray, true: np.ndarray
+) -> dict[str, float]:
+    """
+    Compute standard regression metrics (R^2, RMSE, MAE).
+
+    Args:
+        pred: Predicted values
+        true: True values
+
+    Returns:
+        Dict with R2, RMSE, MAE
+    """
+    pred_flat = pred.flatten()
+    true_flat = true.flatten()
+
+    return {
+        "R2": float(r2_score(true_flat, pred_flat)),
+        "RMSE": float(np.sqrt(mean_squared_error(true_flat, pred_flat))),
+        "MAE": float(mean_absolute_error(true_flat, pred_flat)),
+    }
+
+
+def compute_physics_violation(
+    pg_pred: torch.Tensor,
+    v_bus_pred: torch.Tensor,
+    pd: torch.Tensor,
+    qd: torch.Tensor,
+    G: torch.Tensor,
+    B: torch.Tensor,
+    gen_bus_matrix: torch.Tensor,
+) -> float:
+    """
+    Compute physics violation using AC power flow equations (Eq. 8).
+
+    Measures mismatch between predicted PG and PG computed from
+    predicted voltages via power flow equations.
+
+    Args:
+        pg_pred: Predicted active power [N, n_gen] in p.u.
+        v_bus_pred: Predicted voltages [N, n_bus, 2] (e, f components)
+        pd, qd: Power demands [N, n_bus] in p.u.
+        G, B: Admittance matrices [n_bus, n_bus]
+        gen_bus_matrix: Generator-bus incidence [n_bus, n_gen]
+
+    Returns:
+        Mean physics violation in MW (RMSE * BaseMVA)
+    """
+    with torch.no_grad():
+        result = physics_loss(
+            pg=pg_pred,
+            v_bus=v_bus_pred,
+            pd=pd,
+            qd=qd,
+            G=G,
+            B=B,
+            gen_bus_matrix=gen_bus_matrix,
+            include_reactive=False,
+        )
+        mse_pu = result["loss_p"].item()
+        rmse_mw = np.sqrt(mse_pu) * BASE_MVA
+
+    return rmse_mw
+
+
+# =============================================================================
+# Inference Loop
+# =============================================================================
+def run_inference(
+    task: OPFTask,
+    datamodule: OPFDataModule,
+    device: torch.device,
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict]:
+    """
+    Run inference on test set and collect all predictions/labels.
+
+    Args:
+        task: Loaded OPFTask
+        datamodule: DataModule with test data
+        device: Torch device
+
+    Returns:
+        Tuple of (predictions, labels, auxiliary_data)
+        - predictions: {'pg': [N, n_gen], 'vg': [N, n_gen], 'v_bus': [N, n_bus, 2]}
+        - labels: {'pg': [N, n_gen], 'vg': [N, n_gen]}
+        - auxiliary_data: {'pd': [N, n_bus], 'qd': [N, n_bus], 'operators': {...}}
+    """
+    task.eval()
+    task.to(device)
+
+    all_pg_pred, all_vg_pred, all_v_bus_pred = [], [], []
+    all_pg_label, all_vg_label = [], []
+    all_pd, all_qd = [], []
+    first_operators = None
+
+    dataloader = datamodule.test_dataloader()
+
+    with torch.no_grad():
+        for batch in dataloader:
+            # Move tensors to device
+            batch_device = {}
+            for k, v in batch.items():
+                if isinstance(v, torch.Tensor):
+                    batch_device[k] = v.to(device)
+                elif isinstance(v, dict):
+                    batch_device[k] = {
+                        kk: vv.to(device) if isinstance(vv, torch.Tensor) else vv
+                        for kk, vv in v.items()
+                    }
+                else:
+                    batch_device[k] = v
+
+            # Forward pass through model
+            preds = task.model(batch_device)
+
+            # Collect predictions
+            all_pg_pred.append(preds["pg"].cpu())
+            all_vg_pred.append(preds["vg"].cpu())
+            all_v_bus_pred.append(preds["v_bus"].cpu())
+
+            # Collect labels
+            all_pg_label.append(batch["pg_label"].cpu())
+            all_vg_label.append(batch["vg_label"].cpu())
+
+            # Collect auxiliary data for physics loss
+            all_pd.append(batch["pd"].cpu())
+            all_qd.append(batch["qd"].cpu())
+
+            # Store first batch operators (same topology assumed)
+            if first_operators is None and "operators" in batch:
+                first_operators = {
+                    k: v.cpu() if isinstance(v, torch.Tensor) else v
+                    for k, v in batch["operators"].items()
+                }
+
+    predictions = {
+        "pg": torch.cat(all_pg_pred, dim=0),
+        "vg": torch.cat(all_vg_pred, dim=0),
+        "v_bus": torch.cat(all_v_bus_pred, dim=0),
+    }
+    labels = {
+        "pg": torch.cat(all_pg_label, dim=0),
+        "vg": torch.cat(all_vg_label, dim=0),
+    }
+    auxiliary = {
+        "pd": torch.cat(all_pd, dim=0),
+        "qd": torch.cat(all_qd, dim=0),
+        "operators": first_operators,
+    }
+
+    return predictions, labels, auxiliary
+
+
+# =============================================================================
+# Main Evaluation Function
+# =============================================================================
+@hydra.main(version_base=None, config_path="../configs", config_name="config")
+def main(cfg: DictConfig) -> None:
+    """
+    Main evaluation function.
+
+    Args:
+        cfg: Hydra configuration (expects optional 'ckpt_path' key)
+    """
+    print("=" * 70)
+    print("Model Evaluation - deep_opf")
+    print("=" * 70)
+
+    # Get original working directory
+    original_cwd = Path(hydra.utils.get_original_cwd())
+
+    # ==========================================================================
+    # 1. Resolve checkpoint path
+    # ==========================================================================
+    ckpt_path_str = cfg.get("ckpt_path", "best")
+
+    if ckpt_path_str == "best" or ckpt_path_str is None:
+        # Search for most recent checkpoint in outputs/ and lightning_logs/
+        print("\nSearching for best checkpoint...")
+        ckpt_path = find_best_checkpoint(original_cwd / "outputs")
+        if ckpt_path is None:
+            ckpt_path = find_best_checkpoint(original_cwd / "lightning_logs")
+        if ckpt_path is None:
+            print("[ERROR] No checkpoint found in outputs/ or lightning_logs/")
+            print("Please provide ckpt_path=/path/to/checkpoint.ckpt")
+            return
+        print(f"  Found: {ckpt_path}")
+    else:
+        # Use provided path (resolve relative to original cwd)
+        ckpt_path = Path(ckpt_path_str)
+        if not ckpt_path.is_absolute():
+            ckpt_path = original_cwd / ckpt_path
+        if not ckpt_path.exists():
+            print(f"[ERROR] Checkpoint not found: {ckpt_path}")
+            return
+        print(f"\nUsing checkpoint: {ckpt_path}")
+
+    # ==========================================================================
+    # 2. Set up DataModule
+    # ==========================================================================
+    print("\nSetting up DataModule...")
+    pl.seed_everything(cfg.seed, workers=True)
+
+    data_dir = original_cwd / cfg.data.data_dir
+    feature_type = cfg.data.feature_type
+
+    datamodule = OPFDataModule(
+        data_dir=str(data_dir),
+        train_file=cfg.data.train_file,
+        val_file=cfg.data.val_file,
+        test_file=cfg.data.get("test_file"),
+        batch_size=cfg.train.batch_size,
+        num_workers=0,  # Use 0 for evaluation to avoid multiprocessing issues
+        feature_type=feature_type,
+        pin_memory=False,
+    )
+
+    # Setup for test stage (loads test data and norm_stats from training data)
+    datamodule.setup(stage="fit")   # Load training data (for norm_stats)
+    datamodule.setup(stage="test")  # Load test data
+    print(f"  Data dir: {data_dir}")
+    print(f"  Feature type: {feature_type}")
+    print(f"  Test samples: {len(datamodule.val_dataset)}")
+
+    # ==========================================================================
+    # 3. Instantiate model and load checkpoint
+    # ==========================================================================
+    print("\nLoading model from checkpoint...")
+    n_bus = cfg.data.n_bus
+    n_gen = cfg.data.n_gen
+    gen_bus_indices = list(cfg.data.gen_bus_indices)
+
+    # Instantiate base model (required for OPFTask.load_from_checkpoint)
+    model = instantiate_model(cfg, n_bus, n_gen)
+
+    # Load OPFTask from checkpoint
+    task = OPFTask.load_from_checkpoint(
+        str(ckpt_path),
         model=model,
         lr=cfg.model.task.lr,
         kappa=cfg.model.task.kappa,
@@ -552,36 +397,146 @@ def main(cfg: DictConfig) -> None:
         gen_bus_indices=gen_bus_indices,
         n_bus=n_bus,
     )
+    print(f"  Model: {cfg.model.name}")
+    print(f"  Checkpoint loaded successfully")
 
-    task = load_checkpoint(str(checkpoint_path), task)
-    print("[OK] Checkpoint loaded")
-
-    # Run inference
+    # ==========================================================================
+    # 4. Run inference
+    # ==========================================================================
+    print("\nRunning inference...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[OK] Device: {device}")
+    print(f"  Device: {device}")
 
-    predictions, labels, batch_data = run_inference(task, datamodule, device)
-    print(f"[OK] Inference complete: {predictions['pg'].shape[0]} samples")
+    predictions, labels, auxiliary = run_inference(task, datamodule, device)
+    n_samples = predictions["pg"].shape[0]
+    print(f"  Processed {n_samples} samples")
 
-    # Get normalization stats
-    norm_stats = datamodule.get_norm_stats()
+    # ==========================================================================
+    # 5. Denormalize predictions and labels
+    # ==========================================================================
+    print("\nDenormalizing outputs...")
 
-    # Evaluate
-    metrics = evaluate_model(
-        predictions=predictions,
-        labels=labels,
-        batch_data=batch_data,
-        norm_stats=norm_stats,
-        gen_bus_indices=gen_bus_indices,
-        n_bus=n_bus,
-    )
+    # Get norm_stats from dataset
+    norm_stats = datamodule.train_dataset.norm_stats
 
-    # Print results
-    print_results_table(metrics, cfg)
+    if norm_stats is not None:
+        pg_mean = norm_stats["pg_mean"]
+        pg_std = norm_stats["pg_std"]
+        vg_mean = norm_stats["vg_mean"]
+        vg_std = norm_stats["vg_std"]
 
-    # Cleanup old lightning logs
-    cleanup_lightning_logs(keep_versions=5)
-    print("\n[OK] Cleaned up old lightning_logs (kept last 5 versions)")
+        # Denormalize predictions
+        pg_pred_pu = denormalize_tensor(predictions["pg"], pg_mean, pg_std)
+        vg_pred_pu = denormalize_tensor(predictions["vg"], vg_mean, vg_std)
+
+        # Denormalize labels
+        pg_label_pu = denormalize_tensor(labels["pg"], pg_mean, pg_std)
+        vg_label_pu = denormalize_tensor(labels["vg"], vg_mean, vg_std)
+
+        print(f"  PG: mean={pg_mean.mean():.4f}, std={pg_std.mean():.4f}")
+        print(f"  VG: mean={vg_mean.mean():.4f}, std={vg_std.mean():.4f}")
+    else:
+        print("  [WARN] No norm_stats found, assuming data is already in p.u.")
+        pg_pred_pu = predictions["pg"]
+        vg_pred_pu = predictions["vg"]
+        pg_label_pu = labels["pg"]
+        vg_label_pu = labels["vg"]
+
+    # Convert to numpy for metrics
+    pg_pred_np = pg_pred_pu.numpy()
+    vg_pred_np = vg_pred_pu.numpy()
+    pg_label_np = pg_label_pu.numpy()
+    vg_label_np = vg_label_pu.numpy()
+
+    # ==========================================================================
+    # 6. Compute metrics
+    # ==========================================================================
+    print("\nComputing metrics...")
+
+    # Probabilistic Accuracy (Eq. 37)
+    pacc_pg = probabilistic_accuracy(pg_pred_np, pg_label_np, PG_THRESHOLD_PU)
+    pacc_vg = probabilistic_accuracy(vg_pred_np, vg_label_np, VG_THRESHOLD_PU)
+
+    # Standard regression metrics
+    pg_metrics = compute_regression_metrics(pg_pred_np, pg_label_np)
+    vg_metrics = compute_regression_metrics(vg_pred_np, vg_label_np)
+
+    # Physics violation (Eq. 8)
+    physics_violation_mw = float("nan")
+    if auxiliary["operators"] is not None:
+        print("  Computing physics violation...")
+        operators = auxiliary["operators"]
+
+        # Reconstruct G, B matrices
+        if "G" in operators:
+            G = operators["G"]
+            B = operators["B"]
+        else:
+            g_ndiag = operators["g_ndiag"]
+            b_ndiag = operators["b_ndiag"]
+            g_diag = operators["g_diag"]
+            b_diag = operators["b_diag"]
+
+            # Handle batched operators (use first topology)
+            if g_ndiag.dim() == 3:
+                g_ndiag = g_ndiag[0]
+                b_ndiag = b_ndiag[0]
+                g_diag = g_diag[0]
+                b_diag = b_diag[0]
+
+            G = g_ndiag + torch.diag(g_diag)
+            B = b_ndiag + torch.diag(b_diag)
+
+        # Build generator-bus matrix
+        gen_bus_matrix = build_gen_bus_matrix(n_bus, gen_bus_indices)
+
+        # Compute physics violation
+        physics_violation_mw = compute_physics_violation(
+            pg_pred=pg_pred_pu,
+            v_bus_pred=predictions["v_bus"],  # v_bus not normalized
+            pd=auxiliary["pd"],
+            qd=auxiliary["qd"],
+            G=G,
+            B=B,
+            gen_bus_matrix=gen_bus_matrix,
+        )
+
+    # ==========================================================================
+    # 7. Print results table
+    # ==========================================================================
+    print("\n" + "=" * 70)
+    print("EVALUATION RESULTS")
+    print("=" * 70)
+    print(f"Model: {cfg.model.name.upper()}")
+    print(f"Dataset: {cfg.data.name}")
+    print(f"Test samples: {n_samples}")
+    print(f"Checkpoint: {ckpt_path.name}")
+    print("=" * 70)
+
+    # Probabilistic Accuracy Table
+    pacc_table = [
+        ["PG", f"{pacc_pg:.2f}%", f"< {PG_THRESHOLD_PU} p.u. (< 1 MW)"],
+        ["VG", f"{pacc_vg:.2f}%", f"< {VG_THRESHOLD_PU} p.u."],
+    ]
+    print("\n[Probabilistic Accuracy] (Eq. 37)")
+    print(tabulate(pacc_table, headers=["Variable", "Pacc", "Threshold"], tablefmt="grid"))
+
+    # Regression Metrics Table
+    reg_table = [
+        ["PG (p.u.)", f"{pg_metrics['R2']:.4f}", f"{pg_metrics['RMSE']:.6f}", f"{pg_metrics['MAE']:.6f}"],
+        ["VG (p.u.)", f"{vg_metrics['R2']:.4f}", f"{vg_metrics['RMSE']:.6f}", f"{vg_metrics['MAE']:.6f}"],
+    ]
+    print("\n[Regression Metrics]")
+    print(tabulate(reg_table, headers=["Variable", "R^2", "RMSE", "MAE"], tablefmt="grid"))
+
+    # Physics Violation
+    print("\n[Physics Consistency] (Eq. 8)")
+    if not np.isnan(physics_violation_mw):
+        print(f"  Active Power Mismatch (RMSE): {physics_violation_mw:.4f} MW")
+    else:
+        print("  Not computed (missing topology operators)")
+
+    print("\n" + "=" * 70)
 
 
 if __name__ == "__main__":

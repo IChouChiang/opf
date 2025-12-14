@@ -1,15 +1,19 @@
-# @package _global_
 # Main configuration file for deep_opf training
 # Uses Hydra for configuration management
 
 defaults:
-  - data: case39
+  - data: case6
   - model: gcnn
   - train: default
   - _self_
 
 # Global settings
 seed: 42
+
+# Hydra output directory
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 # Logging and checkpointing
 logging:

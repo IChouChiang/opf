@@ -16,6 +16,10 @@ train_file: samples_train.npz
 val_file: samples_test.npz
 test_file: samples_unseen.npz
 
+# Batch size (from train config)
+batch_size: ${train.batch_size}
+num_workers: 0
+
 # Feature type: interpolated from model config
 # 'flat' for DNN, 'graph' for GCNN
 feature_type: ${model.feature_type}

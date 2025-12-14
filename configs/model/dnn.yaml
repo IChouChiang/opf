@@ -9,11 +9,11 @@ feature_type: flat  # Used by data config via interpolation
 # For Case6: 2*6 + 2*36 = 84
 architecture:
   hidden_dim: 64
-  num_layers: 3
+  num_layers: 2
   dropout: 0.1
 
 # Task settings (OPFTask)
 task:
-  lr: 1.0e-3
+  lr: ${train.lr}
   kappa: 0.1
-  weight_decay: 1.0e-4
+  weight_decay: ${train.weight_decay}

@@ -1,0 +1,32 @@
+# configs/data/case6.yaml
+# Configuration for Case 6ww System (Wood & Wollenberg 6-bus)
+# This is the dataset that achieved 97%+ accuracy in Week7to8 report
+
+name: case6ww
+
+# Path to Case 6 data (archive_legacy_data/data contains the original Case 6 dataset)
+data_dir: legacy/gcnn_opf_01/archive_legacy_data/data
+
+# Batch size (from train config)
+batch_size: ${train.batch_size}
+num_workers: 0
+
+# Filenames
+train_file: samples_train.npz
+val_file: samples_test.npz
+test_file: samples_test.npz
+
+# System Dimensions (CRITICAL for model shape)
+n_bus: 6
+n_gen: 3
+
+# Generator bus indices (0-indexed)
+# For Case 6ww, generators are at buses 0, 1, 2
+gen_bus_indices: [0, 1, 2]
+
+# Dynamic Feature Type
+# This allows the model (DNN vs GCNN) to request "flat" or "graph" data automatically
+feature_type: ${model.feature_type}
+
+# DataLoader settings
+pin_memory: true
