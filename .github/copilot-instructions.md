@@ -1,5 +1,7 @@
 # AI Agent Instructions for OPF Project
 
+**PLEASE CODE EVERYTHING IN A PROFESSIONAL MANNER. FOLLOW BEST PRACTICES.**
+
 ## Project Overview
 This is an **Optimal Power Flow (OPF) educational project** using Python for power systems optimization and machine learning. The project has evolved from basic DC-OPF (Week 2) to AC-OPF (Week 4) and now focuses on **Physics-Informed Machine Learning** (Week 7-8).
 

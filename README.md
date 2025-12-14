@@ -27,7 +27,19 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 - Moved hardcoded parameters to JSON config files in `gcnn_opf_01/configs/`.
 - New parameter `model_type`: `"flattened"` (original) or `"nodewise"` (new).
 
+### Unified Model Refactoring (Dec 2025)
+- **New Package:** `src/deep_opf/` - Unified deep learning framework for OPF
+- **Models:** 
+  - `AdmittanceDNN`: Fully connected network for flat feature input (legacy Model 03)
+  - `GCNN`: Physics-guided graph convolutional network (legacy Model 01)
+- **Data Loading:** 
+  - `OPFDataset`: Unified PyTorch Dataset supporting 'flat' and 'graph' feature types
+  - `OPFDataModule`: PyTorch Lightning DataModule for streamlined training
+- **Verification:** `tests/verify_models.py` - Comprehensive model validation script
+
 ---
+
+## 📁 Project Structure
 
 ## 📁 Project Structure
 
@@ -56,9 +68,20 @@ opf/
 │   ├── evaluate.py                  # Model evaluation
 │   └── tune_batch_size.py           # Hyperparameter tuning (with caching)
 ├── src/                # Reusable modules
+│   ├── deep_opf/        # Unified deep learning framework
+│   │   ├── data/        # Dataset and DataModule classes
+│   │   │   ├── dataset.py      # OPFDataset (flat/graph features)
+│   │   │   ├── datamodule.py   # OPFDataModule (Lightning)
+│   │   │   └── __init__.py
+│   │   ├── models/      # Neural network architectures
+│   │   │   ├── dnn.py          # AdmittanceDNN (MLP)
+│   │   │   ├── gcnn.py         # GCNN (graph convolution)
+│   │   │   └── __init__.py
+│   │   └── __init__.py
 │   ├── ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
 │   └── helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
 ├── tests/              # Test harnesses and baselines
+│   ├── verify_models.py       # DNN/GCNN model verification
 │   ├── test_case39.py         # IEEE 39-bus AC-OPF
 │   ├── test_case57.py         # IEEE 57-bus AC-OPF
 │   ├── test_feature_construction.py  # Feature construction validation
