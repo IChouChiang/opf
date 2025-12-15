@@ -221,3 +221,4 @@ outputs/
 # MLOps generated files
 current_status.txt
 experiments_log.csv
+multirun/

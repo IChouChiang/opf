@@ -119,7 +119,7 @@ def load_experiments(csv_path: Path = CSV_PATH) -> pd.DataFrame:
 
     # Read CSV with pandas - handles all parsing
     df = pd.read_csv(csv_path, dtype=str)  # Read all as string first
-    
+
     if df.empty:
         return df
 
@@ -157,7 +157,11 @@ def load_experiments(csv_path: Path = CSV_PATH) -> pd.DataFrame:
     # Convert boolean columns to proper strings
     if "warm_start" in df.columns:
         df["warm_start"] = df["warm_start"].apply(
-            lambda x: "Yes" if str(x).lower() == "true" else ("No" if str(x).lower() == "false" else "")
+            lambda x: (
+                "Yes"
+                if str(x).lower() == "true"
+                else ("No" if str(x).lower() == "false" else "")
+            )
         )
 
     return df
@@ -401,7 +405,7 @@ def export_html(
     df: pd.DataFrame, output_path: Path, title: str = "Experiment Results"
 ) -> None:
     """Export DataFrame to interactive HTML file with filtering and sorting.
-    
+
     Uses DataTables.js for client-side interactivity:
     - Column sorting (click headers)
     - Global search
@@ -410,24 +414,32 @@ def export_html(
     - Export buttons (CSV, Excel, PDF)
     """
     import json
-    
+
     # Prepare data for DataTables
     df_display = df.copy()
-    
+
     # Drop columns that are completely empty
-    empty_cols = [col for col in df_display.columns 
-                  if df_display[col].replace("", pd.NA).isna().all()]
+    empty_cols = [
+        col
+        for col in df_display.columns
+        if df_display[col].replace("", pd.NA).isna().all()
+    ]
     df_display = df_display.drop(columns=empty_cols)
-    
+
     # Convert DataFrame to JSON for JavaScript
-    columns_json = json.dumps([{"data": i, "title": col} for i, col in enumerate(df_display.columns)])
+    columns_json = json.dumps(
+        [{"data": i, "title": col} for i, col in enumerate(df_display.columns)]
+    )
     data_json = json.dumps(df_display.fillna("").values.tolist())
     col_names_json = json.dumps(list(df_display.columns))
-    
+
     # Build table headers
-    header_row = "".join(f'<th>{col}</th>' for col in df_display.columns)
-    filter_row = "".join('<th><input type="text" class="column-filter" placeholder="Filter..." /></th>' for _ in df_display.columns)
-    
+    header_row = "".join(f"<th>{col}</th>" for col in df_display.columns)
+    filter_row = "".join(
+        '<th><input type="text" class="column-filter" placeholder="Filter..." /></th>'
+        for _ in df_display.columns
+    )
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
