@@ -12,6 +12,14 @@ Usage:
 
     # Multi-run with different seeds
     python scripts/train.py --multirun seed=42,123,456
+
+    # Two-stage training (Phase 2 with warm start from Phase 1):
+    # Phase 1: Train with supervised loss only (kappa=0)
+    python scripts/train.py model.task.kappa=0.0 train.max_epochs=50
+
+    # Phase 2: Load Phase 1 weights, train with physics loss (kappa=1.0)
+    python scripts/train.py model.task.kappa=1.0 train.max_epochs=25 \\
+        train.warm_start_ckpt=outputs/2025-01-01/12-00-00/lightning_logs/version_0/checkpoints/best.ckpt
 """
 
 import sys
@@ -19,6 +27,7 @@ from pathlib import Path
 
 import hydra
 import pytorch_lightning as pl
+import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 
@@ -234,6 +243,37 @@ def main(cfg: DictConfig) -> None:
     model = instantiate_model(cfg, n_bus, n_gen)
     task = instantiate_task(model, cfg, gen_bus_indices, n_bus)
     callbacks = setup_callbacks(cfg)
+
+    # Warm start: Load weights from checkpoint if provided
+    warm_start_ckpt = cfg.train.get("warm_start_ckpt")
+    if warm_start_ckpt:
+        warm_start_path = Path(warm_start_ckpt)
+        if not warm_start_path.is_absolute():
+            # Resolve relative paths from original working directory
+            original_cwd = Path(hydra.utils.get_original_cwd())
+            warm_start_path = original_cwd / warm_start_path
+
+        if warm_start_path.exists():
+            print(f"\nWarm starting from: {warm_start_path}")
+            checkpoint = torch.load(warm_start_path, map_location="cpu")
+
+            # Handle PyTorch Lightning checkpoint format (contains 'state_dict' key)
+            if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+                state_dict = checkpoint["state_dict"]
+            else:
+                state_dict = checkpoint
+
+            # Load weights only (strict=False allows partial loading)
+            missing, unexpected = task.load_state_dict(state_dict, strict=False)
+            if missing:
+                print(f"  Missing keys: {missing}")
+            if unexpected:
+                print(f"  Unexpected keys: {unexpected}")
+            print("  Weights loaded successfully. Optimizer will be fresh.")
+        else:
+            raise FileNotFoundError(
+                f"Warm start checkpoint not found: {warm_start_path}"
+            )
 
     # Create trainer
     print("\n" + "=" * 60)

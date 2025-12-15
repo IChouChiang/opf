@@ -14,3 +14,8 @@ num_workers: 0
 precision: 32
 gradient_clip_val: null
 accumulate_grad_batches: 1
+
+# Warm start: Path to checkpoint for two-stage training
+# If provided, weights are loaded before training (optimizer NOT loaded)
+# Usage: train.warm_start_ckpt=/path/to/phase1_checkpoint.ckpt
+warm_start_ckpt: null
