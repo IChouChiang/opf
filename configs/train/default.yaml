@@ -1,6 +1,9 @@
 # Default training configuration
 # @package train
 
+# Training mode: "standard" (with TQDM) or "ssh" (LiteProgressBar, no TQDM)
+mode: standard
+
 max_epochs: 50
 batch_size: 24  # Legacy exp_final_1000n uses 24
 lr: 1e-3

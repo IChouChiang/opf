@@ -20,9 +20,13 @@ Usage:
     # Phase 2: Load Phase 1 weights, train with physics loss (kappa=1.0)
     python scripts/train.py model.task.kappa=1.0 train.max_epochs=25 \\
         train.warm_start_ckpt=outputs/2025-01-01/12-00-00/lightning_logs/version_0/checkpoints/best.ckpt
+
+    # SSH mode (lightweight progress bar, no TQDM, logs to CSV)
+    python scripts/train.py train.mode=ssh
 """
 
 import sys
+import time
 from pathlib import Path
 
 import hydra
@@ -37,6 +41,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from deep_opf.data import OPFDataModule
 from deep_opf.models import GCNN, AdmittanceDNN
 from deep_opf.task import OPFTask
+from deep_opf.utils.callbacks import LiteProgressBar
+from deep_opf.utils.logger import log_experiment_to_csv
 
 
 def instantiate_model(cfg: DictConfig, n_bus: int, n_gen: int) -> pl.LightningModule:
@@ -166,12 +172,13 @@ def instantiate_task(
     return task
 
 
-def setup_callbacks(cfg: DictConfig) -> list:
+def setup_callbacks(cfg: DictConfig, ssh_mode: bool = False) -> list:
     """
     Set up training callbacks.
 
     Args:
         cfg: Full Hydra config
+        ssh_mode: If True, add LiteProgressBar for SSH-friendly output
 
     Returns:
         List of callbacks
@@ -208,6 +215,11 @@ def setup_callbacks(cfg: DictConfig) -> list:
             f"patience={patience}"
         )
 
+    # SSH mode: Add lightweight progress bar
+    if ssh_mode:
+        callbacks.append(LiteProgressBar())
+        print("Added LiteProgressBar (SSH mode)")
+
     return callbacks
 
 
@@ -239,10 +251,16 @@ def main(cfg: DictConfig) -> None:
     print("Instantiating components...")
     print("=" * 60)
 
+    # Check training mode
+    train_mode = cfg.train.get("mode", "standard")
+    ssh_mode = train_mode == "ssh"
+    if ssh_mode:
+        print("SSH mode enabled: Using LiteProgressBar, disabling TQDM")
+
     datamodule = instantiate_datamodule(cfg)
     model = instantiate_model(cfg, n_bus, n_gen)
     task = instantiate_task(model, cfg, gen_bus_indices, n_bus)
-    callbacks = setup_callbacks(cfg)
+    callbacks = setup_callbacks(cfg, ssh_mode=ssh_mode)
 
     # Warm start: Load weights from checkpoint if provided
     warm_start_ckpt = cfg.train.get("warm_start_ckpt")
@@ -290,6 +308,7 @@ def main(cfg: DictConfig) -> None:
         callbacks=callbacks,
         log_every_n_steps=cfg.logging.log_every_n_steps,
         deterministic=True,
+        enable_progress_bar=not ssh_mode,  # Disable TQDM in SSH mode
     )
 
     print(
@@ -297,20 +316,42 @@ def main(cfg: DictConfig) -> None:
         f"accelerator={cfg.train.accelerator}, devices={cfg.train.devices}"
     )
 
-    # Train
+    # Train with timing
     print("\n" + "=" * 60)
     print("Starting training...")
     print("=" * 60)
 
+    start_time = time.time()
     trainer.fit(task, datamodule=datamodule)
+    duration = time.time() - start_time
+
+    # Get best score
+    best_score = None
+    if trainer.checkpoint_callback:
+        best_score = trainer.checkpoint_callback.best_model_score
+        if hasattr(best_score, "item"):
+            best_score = best_score.item()
 
     # Print best checkpoint path
     print("\n" + "=" * 60)
     print("Training completed!")
     print("=" * 60)
+    print(f"Duration: {duration:.1f}s ({duration/60:.1f}m)")
     if trainer.checkpoint_callback:
         print(f"Best model: {trainer.checkpoint_callback.best_model_path}")
-        print(f"Best score: {trainer.checkpoint_callback.best_model_score}")
+        print(f"Best score: {best_score}")
+
+    # Log experiment to CSV
+    if best_score is not None:
+        original_cwd = Path(hydra.utils.get_original_cwd())
+        csv_path = original_cwd / "experiments_log.csv"
+        log_experiment_to_csv(
+            cfg=cfg,
+            model=model,
+            best_loss=best_score,
+            duration=duration,
+            csv_path=csv_path,
+        )
 
 
 if __name__ == "__main__":
