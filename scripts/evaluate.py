@@ -223,6 +223,7 @@ def run_inference(
     task: OPFTask,
     datamodule: OPFDataModule,
     device: torch.device,
+    feature_type: str = "graph",
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict]:
     """
     Run inference on test set and collect all predictions/labels.
@@ -231,6 +232,7 @@ def run_inference(
         task: Loaded OPFTask
         datamodule: DataModule with test data
         device: Torch device
+        feature_type: 'flat' for DNN, 'graph' for GCNN
 
     Returns:
         Tuple of (predictions, labels, auxiliary_data)
@@ -264,7 +266,12 @@ def run_inference(
                     batch_device[k] = v
 
             # Forward pass through model
-            preds = task.model(batch_device)
+            # DNN expects flat tensor input, GCNN expects batch dict
+            if feature_type == "flat":
+                model_input = batch_device["input"]
+            else:
+                model_input = batch_device
+            preds = task.model(model_input)
 
             # Collect predictions
             all_pg_pred.append(preds["pg"].cpu())
@@ -406,7 +413,9 @@ def main(cfg: DictConfig) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Device: {device}")
 
-    predictions, labels, auxiliary = run_inference(task, datamodule, device)
+    predictions, labels, auxiliary = run_inference(
+        task, datamodule, device, feature_type=feature_type
+    )
     n_samples = predictions["pg"].shape[0]
     print(f"  Processed {n_samples} samples")
 
