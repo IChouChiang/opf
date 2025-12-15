@@ -199,6 +199,59 @@ python scripts/evaluate.py data=case39 model=gcnn
 
 ---
 
+## Viewing Results
+
+### Terminal Display
+
+```powershell
+# Show all evaluation results
+python scripts/show_results.py
+
+# Filter by dataset
+python scripts/show_results.py --dataset case39
+
+# Filter by model
+python scripts/show_results.py --model gcnn
+
+# Show training rows too
+python scripts/show_results.py --phase all
+
+# Compare models
+python scripts/show_results.py --dataset case39 --compare
+```
+
+### Interactive HTML Dashboard
+
+```powershell
+python scripts/show_results.py --dataset case39 --html outputs/results_case39.html
+
+# Then open in browser (start local server first):
+cd outputs; python -m http.server 8080
+# Open: http://localhost:8080/results_case39.html
+```
+
+**HTML Features:**
+- 🔍 **Global Search**: Filter all columns instantly (top-right search box)
+- ⬆️⬇️ **Column Sorting**: Click any header to sort
+- 🔎 **Per-Column Filters**: Type in footer input boxes to filter specific columns
+- 📊 **Export Buttons**: Copy, CSV, Excel, PDF, Print
+- 🟢 **Best Values Highlighted**: Green = higher is better, Blue = lower is better
+
+**Note:** Empty columns (training params in evaluation rows, metrics in training rows) are automatically hidden in HTML export.
+
+### Understanding the CSV Structure
+
+`experiments_log.csv` contains two row types:
+
+| Row Type | Contains | Purpose |
+|----------|----------|---------|
+| **Training** | Architecture (layers, hidden_dim, lr, kappa), duration, best_loss | Track training runs |
+| **Evaluation** | Metrics (R², Pacc, RMSE, Physics) | Track model performance |
+
+Training and Evaluation rows share `model`, `dataset`, and `log_dir` columns but have different populated fields.
+
+---
+
 ## Configuration Reference
 
 ### Model Architecture (GCNN)

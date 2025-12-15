@@ -106,99 +106,22 @@ COMPARE_COLS = [
 # Data Loading & Cleaning
 # =============================================================================
 def load_experiments(csv_path: Path = CSV_PATH) -> pd.DataFrame:
-    """Load experiments CSV and clean up column names.
+    """Load experiments CSV with proper column handling.
 
-    Handles multiple CSV formats from different logger versions.
+    The CSV has a consistent format:
+    - Header with all columns
+    - Training rows: have architecture params, no metrics
+    - Evaluation rows: have metrics, no architecture params
     """
     if not csv_path.exists():
         print(f"[ERROR] File not found: {csv_path}")
         sys.exit(1)
 
-    # Read raw lines to handle inconsistent columns
-    with open(csv_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    if not lines:
-        return pd.DataFrame()
-
-    # Check if new format (has 'phase' column)
-    header = lines[0].strip().split(",")
-    has_phase_col = "phase" in header
-
-    all_rows = []
-
-    for i, line in enumerate(lines[1:], 1):
-        values = line.strip().split(",")
-
-        if has_phase_col:
-            # New format - parse directly
-            row = dict(zip(header, values))
-        else:
-            # Old format - detect row type
-            # Old Training rows: timestamp,Training,model,dataset,...
-            # Old Evaluation rows: timestamp,Evaluation,model,dataset,...,R2_PG,R2_VG,...
-            if len(values) > 1 and values[1] in ["Training", "Evaluation"]:
-                phase = values[1]
-                # Shift values: timestamp, phase, model, dataset, ...
-                row = {
-                    "timestamp": values[0],
-                    "phase": phase,
-                    "model": values[2] if len(values) > 2 else "",
-                    "dataset": values[3] if len(values) > 3 else "",
-                }
-
-                if phase == "Training":
-                    # Old training row format
-                    row.update(
-                        {
-                            "n_bus": values[4] if len(values) > 4 else "",
-                            "n_gen": values[5] if len(values) > 5 else "",
-                            "params": values[6] if len(values) > 6 else "",
-                            "hidden_dim": values[7] if len(values) > 7 else "",
-                            "channels": values[8] if len(values) > 8 else "",
-                            "in_channels": values[9] if len(values) > 9 else "",
-                            "layers": values[10] if len(values) > 10 else "",
-                            "lr": values[11] if len(values) > 11 else "",
-                            "kappa": values[12] if len(values) > 12 else "",
-                            "weight_decay": values[13] if len(values) > 13 else "",
-                            "batch_size": values[14] if len(values) > 14 else "",
-                            "max_epochs": values[15] if len(values) > 15 else "",
-                            "warm_start": values[16] if len(values) > 16 else "",
-                            "best_loss": values[17] if len(values) > 17 else "",
-                            "duration": values[18] if len(values) > 18 else "",
-                            "duration_sec": values[19] if len(values) > 19 else "",
-                            "log_dir": values[-1] if len(values) > 20 else "",
-                        }
-                    )
-                else:
-                    # Old evaluation row format
-                    # timestamp,Evaluation,model,dataset,<16 empty>,R2_PG,R2_VG,Pacc_PG,Pacc_VG,RMSE_PG,RMSE_VG,MAE_PG,MAE_VG,Physics,ckpt_path,n_samples
-                    # Actual positions: R2_PG at [20], R2_VG at [21], etc.
-                    row.update(
-                        {
-                            "R2_PG": values[20] if len(values) > 20 else "",
-                            "R2_VG": values[21] if len(values) > 21 else "",
-                            "Pacc_PG": values[22] if len(values) > 22 else "",
-                            "Pacc_VG": values[23] if len(values) > 23 else "",
-                            "RMSE_PG": values[24] if len(values) > 24 else "",
-                            "RMSE_VG": values[25] if len(values) > 25 else "",
-                            "MAE_PG": values[26] if len(values) > 26 else "",
-                            "MAE_VG": values[27] if len(values) > 27 else "",
-                            "Physics_Violation_MW": (
-                                values[28] if len(values) > 28 else ""
-                            ),
-                            "ckpt_path": values[29] if len(values) > 29 else "",
-                            "n_samples": values[30] if len(values) > 30 else "",
-                        }
-                    )
-            else:
-                # Very old format without phase marker - assume Training
-                row = dict(zip(header, values))
-                row["phase"] = "Training"
-
-        all_rows.append(row)
-
-    df = pd.DataFrame(all_rows)
+    # Read CSV with pandas - handles all parsing
+    df = pd.read_csv(csv_path, dtype=str)  # Read all as string first
+    
+    if df.empty:
+        return df
 
     # Convert numeric columns
     numeric_cols = [
@@ -231,33 +154,11 @@ def load_experiments(csv_path: Path = CSV_PATH) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Detect phase from first column pattern
-    # Old format: model column contains phase (Training/Evaluation)
-    # New format: separate phase column
-    if (
-        "phase" not in df.columns
-        and df["model"].str.contains("Training|Evaluation", na=False).any()
-    ):
-        # Old format - extract phase from model column
-        mask_train = df["model"] == "Training"
-        mask_eval = df["model"] == "Evaluation"
-
-        # For Training rows, model is in 'dataset' column
-        # For Evaluation rows, model is in 'dataset' column
-        df.loc[mask_train, "phase"] = "Training"
-        df.loc[mask_eval, "phase"] = "Evaluation"
-
-        # Shift columns for old format rows
-        df.loc[mask_train | mask_eval, "model"] = df.loc[
-            mask_train | mask_eval, "dataset"
-        ]
-        df.loc[mask_train | mask_eval, "dataset"] = df.loc[
-            mask_train | mask_eval, "n_bus"
-        ]
-
-    # Fill missing phase
-    if "phase" not in df.columns:
-        df["phase"] = "Training"  # Default for old format without phase marker
+    # Convert boolean columns to proper strings
+    if "warm_start" in df.columns:
+        df["warm_start"] = df["warm_start"].apply(
+            lambda x: "Yes" if str(x).lower() == "true" else ("No" if str(x).lower() == "false" else "")
+        )
 
     return df
 
@@ -499,92 +400,274 @@ def compare_models(df: pd.DataFrame) -> None:
 def export_html(
     df: pd.DataFrame, output_path: Path, title: str = "Experiment Results"
 ) -> None:
-    """Export DataFrame to styled HTML file."""
-    # CSS styling
-    css = """
+    """Export DataFrame to interactive HTML file with filtering and sorting.
+    
+    Uses DataTables.js for client-side interactivity:
+    - Column sorting (click headers)
+    - Global search
+    - Per-column filters
+    - Pagination
+    - Export buttons (CSV, Excel, PDF)
+    """
+    import json
+    
+    # Prepare data for DataTables
+    df_display = df.copy()
+    
+    # Drop columns that are completely empty
+    empty_cols = [col for col in df_display.columns 
+                  if df_display[col].replace("", pd.NA).isna().all()]
+    df_display = df_display.drop(columns=empty_cols)
+    
+    # Convert DataFrame to JSON for JavaScript
+    columns_json = json.dumps([{"data": i, "title": col} for i, col in enumerate(df_display.columns)])
+    data_json = json.dumps(df_display.fillna("").values.tolist())
+    col_names_json = json.dumps(list(df_display.columns))
+    
+    # Build table headers
+    header_row = "".join(f'<th>{col}</th>' for col in df_display.columns)
+    filter_row = "".join('<th><input type="text" class="column-filter" placeholder="Filter..." /></th>' for _ in df_display.columns)
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+    
     <style>
-        body {
+        * {{ box-sizing: border-box; }}
+        body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 40px;
+            margin: 0;
+            padding: 20px 40px;
             background-color: #f5f5f5;
-        }
-        h1 {
-            color: #333;
-            border-bottom: 2px solid #4CAF50;
-            padding-bottom: 10px;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            background-color: white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            margin-top: 20px;
-        }
-        th {
+        }}
+        .header {{
+            background: linear-gradient(135deg, #2e7d32, #4CAF50);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        .header h1 {{ margin: 0 0 10px 0; font-size: 1.8em; }}
+        .header p {{ margin: 5px 0; opacity: 0.9; }}
+        .container {{
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }}
+        table.dataTable {{ width: 100% !important; border-collapse: collapse; }}
+        table.dataTable thead th {{
             background-color: #4CAF50;
             color: white;
             padding: 12px 8px;
-            text-align: left;
-            font-weight: 600;
-        }
-        td {
+            border-bottom: 2px solid #2e7d32;
+            white-space: nowrap;
+        }}
+        table.dataTable tbody td {{
             padding: 10px 8px;
-            border-bottom: 1px solid #ddd;
-        }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .best {
-            background-color: #e8f5e9 !important;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+        }}
+        table.dataTable tbody tr:hover {{ background-color: #e8f5e9 !important; }}
+        table.dataTable tfoot th {{ padding: 8px 4px; }}
+        .best-high {{
+            background-color: #c8e6c9 !important;
             font-weight: bold;
-        }
-        .timestamp {
-            color: #666;
-            font-size: 0.9em;
-        }
-        .metric-good {
             color: #2e7d32;
-        }
-        .metric-bad {
-            color: #c62828;
-        }
-        .footer {
+        }}
+        .best-low {{
+            background-color: #e3f2fd !important;
+            font-weight: bold;
+            color: #1565c0;
+        }}
+        .column-filter {{
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }}
+        .column-filter:focus {{ outline: none; border-color: #4CAF50; }}
+        .stats-row {{
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }}
+        .stat-card {{
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            min-width: 150px;
+        }}
+        .stat-card .label {{ font-size: 0.85em; color: #666; margin-bottom: 5px; }}
+        .stat-card .value {{ font-size: 1.5em; font-weight: bold; color: #2e7d32; }}
+        .dt-buttons {{ margin-bottom: 15px; }}
+        .dt-button {{
+            background: #4CAF50 !important;
+            border: none !important;
+            color: white !important;
+            padding: 8px 16px !important;
+            border-radius: 4px !important;
+            margin-right: 5px !important;
+        }}
+        .dt-button:hover {{ background: #2e7d32 !important; }}
+        .dataTables_filter input {{
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-left: 10px;
+        }}
+        .dataTables_filter input:focus {{ outline: none; border-color: #4CAF50; }}
+        .footer {{
             margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
             color: #666;
             font-size: 0.9em;
-        }
+        }}
+        .legend {{ display: flex; gap: 20px; margin-top: 10px; }}
+        .legend-item {{ display: flex; align-items: center; gap: 5px; }}
+        .legend-box {{ width: 20px; height: 20px; border-radius: 4px; }}
+        .legend-box.high {{ background-color: #c8e6c9; }}
+        .legend-box.low {{ background-color: #e3f2fd; }}
     </style>
-    """
-
-    # Convert DataFrame to HTML
-    html_table = df.to_html(index=False, classes="results-table", escape=False)
-
-    # Build full HTML
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>{title}</title>
-        {css}
-    </head>
-    <body>
-        <h1>{title}</h1>
+</head>
+<body>
+    <div class="header">
+        <h1>🔬 {title}</h1>
         <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
         <p>Total experiments: {len(df)}</p>
-        {html_table}
-        <p class="footer">
-            Metrics: R² (higher=better), Pacc (higher=better), RMSE/Physics (lower=better)
-        </p>
-    </body>
-    </html>
-    """
+    </div>
+    
+    <div class="stats-row" id="statsRow"></div>
+    
+    <div class="container">
+        <table id="resultsTable" class="display nowrap" style="width:100%">
+            <thead>
+                <tr>{header_row}</tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+                <tr>{filter_row}</tr>
+            </tfoot>
+        </table>
+    </div>
+    
+    <div class="footer">
+        <strong>Metrics Guide:</strong>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box high"></div>
+                <span>R², Pacc: Higher is better</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box low"></div>
+                <span>RMSE, Physics Violation: Lower is better</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    
+    <script>
+        const tableData = {data_json};
+        const columns = {columns_json};
+        const colNames = {col_names_json};
+        const higherBetter = ['R2_PG', 'R2_VG', 'Pacc_PG', 'Pacc_VG'];
+        const lowerBetter = ['RMSE_PG', 'RMSE_VG', 'MAE_PG', 'MAE_VG', 'Physics_Violation_MW'];
+        
+        const colIndex = {{}};
+        colNames.forEach((name, idx) => colIndex[name] = idx);
+        
+        $(document).ready(function() {{
+            const table = $('#resultsTable').DataTable({{
+                data: tableData,
+                columns: columns,
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                order: [[0, 'desc']],
+                scrollX: true,
+                dom: 'Blfrtip',
+                buttons: [
+                    {{ extend: 'copy', text: '📋 Copy' }},
+                    {{ extend: 'csv', text: '📄 CSV' }},
+                    {{ extend: 'excel', text: '📊 Excel' }},
+                    {{ extend: 'pdf', text: '📑 PDF', orientation: 'landscape' }},
+                    {{ extend: 'print', text: '🖨️ Print' }}
+                ],
+                createdRow: function(row, data, dataIndex) {{
+                    higherBetter.forEach(function(colName) {{
+                        if (colIndex[colName] !== undefined) {{
+                            const idx = colIndex[colName];
+                            const val = parseFloat(String(data[idx]).replace('%', '').replace('★ ', ''));
+                            if (!isNaN(val)) {{
+                                const maxVal = Math.max(...tableData.map(r => 
+                                    parseFloat(String(r[idx]).replace('%', '').replace('★ ', '')) || -Infinity
+                                ));
+                                if (val === maxVal) $('td', row).eq(idx).addClass('best-high');
+                            }}
+                        }}
+                    }});
+                    lowerBetter.forEach(function(colName) {{
+                        if (colIndex[colName] !== undefined) {{
+                            const idx = colIndex[colName];
+                            const val = parseFloat(String(data[idx]).replace('★ ', ''));
+                            if (!isNaN(val)) {{
+                                const minVal = Math.min(...tableData.map(r => {{
+                                    const v = parseFloat(String(r[idx]).replace('★ ', ''));
+                                    return isNaN(v) ? Infinity : v;
+                                }}));
+                                if (val === minVal) $('td', row).eq(idx).addClass('best-low');
+                            }}
+                        }}
+                    }});
+                }}
+            }});
+            
+            $('#resultsTable tfoot .column-filter').on('keyup change', function() {{
+                table.column($(this).parent().index()).search(this.value).draw();
+            }});
+            
+            // Stats
+            const models = [...new Set(tableData.map(r => r[colIndex['model']]))].filter(Boolean);
+            let statsHtml = `<div class="stat-card"><div class="label">Total</div><div class="value">${{tableData.length}}</div></div>`;
+            statsHtml += `<div class="stat-card"><div class="label">Models</div><div class="value">${{models.join(', ')}}</div></div>`;
+            if (colIndex['R2_PG'] !== undefined) {{
+                const vals = tableData.map(r => parseFloat(String(r[colIndex['R2_PG']]).replace('★ ', ''))).filter(v => !isNaN(v));
+                if (vals.length) statsHtml += `<div class="stat-card"><div class="label">Best R² PG</div><div class="value">${{Math.max(...vals).toFixed(4)}}</div></div>`;
+            }}
+            if (colIndex['Physics_Violation_MW'] !== undefined) {{
+                const vals = tableData.map(r => parseFloat(String(r[colIndex['Physics_Violation_MW']]).replace('★ ', ''))).filter(v => !isNaN(v));
+                if (vals.length) statsHtml += `<div class="stat-card"><div class="label">Best Physics</div><div class="value">${{Math.min(...vals).toFixed(2)}} MW</div></div>`;
+            }}
+            $('#statsRow').html(statsHtml);
+        }});
+    </script>
+</body>
+</html>"""
 
     output_path.write_text(html, encoding="utf-8")
-    print(f"[OK] HTML exported to: {output_path}")
+    print(f"[OK] Interactive HTML exported to: {output_path}")
 
 
 # =============================================================================
