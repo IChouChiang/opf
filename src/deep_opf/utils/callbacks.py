@@ -42,6 +42,7 @@ class LiteProgressBar(pl.Callback):
         self.status_file: Optional[Path] = Path(status_file) if status_file else None
         self._epoch_start_time: float = 0.0
         self._train_start_time: float = 0.0
+        self._last_status: str = ""
 
     def on_train_start(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
@@ -92,7 +93,8 @@ class LiteProgressBar(pl.Callback):
         # Print to stdout
         print(status)
 
-        # Write to status file (overwrite mode)
+        # Write to status file (overwrite mode) and save last status
+        self._last_status = status
         if self.status_file:
             self._write_status(status, epoch, max_epochs, total_time_str)
 
@@ -122,13 +124,20 @@ class LiteProgressBar(pl.Callback):
 
         print(completion_msg)
 
-        # Update status file with completion info
+        # Update status file with completion info (preserve last epoch line)
         if self.status_file:
-            with open(self.status_file, "w", encoding="utf-8") as f:
-                f.write(f"COMPLETED | Total Time: {total_time_str}")
-                if best_score is not None:
-                    f.write(f" | Best Loss: {best_score:.4f}")
-                f.write("\n")
+            try:
+                with open(self.status_file, "w", encoding="utf-8") as f:
+                    # Write last epoch status first (for verification scripts)
+                    if hasattr(self, "_last_status") and self._last_status:
+                        f.write(f"{self._last_status}\n")
+                    # Append completion info
+                    f.write(f"COMPLETED | Total Time: {total_time_str}")
+                    if best_score is not None:
+                        f.write(f" | Best Loss: {best_score:.4f}")
+                    f.write("\n")
+            except OSError as e:
+                print(f"Warning: Could not write status file: {e}")
 
     def _write_status(
         self, status: str, epoch: int, max_epochs: int, total_time: str

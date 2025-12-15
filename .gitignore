@@ -217,3 +217,7 @@ lightning_logs/
 
 # Hydra output directories (timestamped runs)
 outputs/
+
+# MLOps generated files
+current_status.txt
+experiments_log.csv

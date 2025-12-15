@@ -345,12 +345,16 @@ def main(cfg: DictConfig) -> None:
     if best_score is not None:
         original_cwd = Path(hydra.utils.get_original_cwd())
         csv_path = original_cwd / "experiments_log.csv"
+        # Get Hydra output directory (cwd since Hydra changes directory)
+        # Alternative: HydraConfig.get().runtime.output_dir
+        hydra_output_dir = Path.cwd()
         log_experiment_to_csv(
             cfg=cfg,
             model=model,
             best_loss=best_score,
             duration=duration,
             csv_path=csv_path,
+            log_dir=hydra_output_dir,
         )
 
 

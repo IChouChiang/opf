@@ -2,6 +2,7 @@
 
 from deep_opf.utils.callbacks import LiteProgressBar
 from deep_opf.utils.logger import (
+    log_evaluation_to_csv,
     log_experiment_to_csv,
     load_experiment_log,
     print_experiment_summary,
@@ -10,6 +11,7 @@ from deep_opf.utils.logger import (
 __all__ = [
     "LiteProgressBar",
     "log_experiment_to_csv",
+    "log_evaluation_to_csv",
     "load_experiment_log",
     "print_experiment_summary",
 ]

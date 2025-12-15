@@ -21,6 +21,7 @@ def read_csv_rows() -> list[dict]:
     with CSV_LOG.open("r", encoding="utf-8", newline="") as f:
         return list(csv.DictReader(f))
 
+
 def read_csv_lines() -> list[str]:
     if not CSV_LOG.exists():
         return []

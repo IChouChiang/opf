@@ -38,6 +38,7 @@ from deep_opf.data import OPFDataModule
 from deep_opf.loss import build_gen_bus_matrix, physics_loss
 from deep_opf.models import GCNN, AdmittanceDNN
 from deep_opf.task import OPFTask
+from deep_opf.utils.logger import log_evaluation_to_csv
 
 
 # =============================================================================
@@ -152,9 +153,7 @@ def probabilistic_accuracy(
     return float(np.mean(errors < threshold) * 100.0)
 
 
-def compute_regression_metrics(
-    pred: np.ndarray, true: np.ndarray
-) -> dict[str, float]:
+def compute_regression_metrics(pred: np.ndarray, true: np.ndarray) -> dict[str, float]:
     """
     Compute standard regression metrics (R^2, RMSE, MAE).
 
@@ -370,7 +369,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Setup for test stage (loads test data and norm_stats from training data)
-    datamodule.setup(stage="fit")   # Load training data (for norm_stats)
+    datamodule.setup(stage="fit")  # Load training data (for norm_stats)
     datamodule.setup(stage="test")  # Load test data
     print(f"  Data dir: {data_dir}")
     print(f"  Feature type: {feature_type}")
@@ -519,15 +518,29 @@ def main(cfg: DictConfig) -> None:
         ["VG", f"{pacc_vg:.2f}%", f"< {VG_THRESHOLD_PU} p.u."],
     ]
     print("\n[Probabilistic Accuracy] (Eq. 37)")
-    print(tabulate(pacc_table, headers=["Variable", "Pacc", "Threshold"], tablefmt="grid"))
+    print(
+        tabulate(pacc_table, headers=["Variable", "Pacc", "Threshold"], tablefmt="grid")
+    )
 
     # Regression Metrics Table
     reg_table = [
-        ["PG (p.u.)", f"{pg_metrics['R2']:.4f}", f"{pg_metrics['RMSE']:.6f}", f"{pg_metrics['MAE']:.6f}"],
-        ["VG (p.u.)", f"{vg_metrics['R2']:.4f}", f"{vg_metrics['RMSE']:.6f}", f"{vg_metrics['MAE']:.6f}"],
+        [
+            "PG (p.u.)",
+            f"{pg_metrics['R2']:.4f}",
+            f"{pg_metrics['RMSE']:.6f}",
+            f"{pg_metrics['MAE']:.6f}",
+        ],
+        [
+            "VG (p.u.)",
+            f"{vg_metrics['R2']:.4f}",
+            f"{vg_metrics['RMSE']:.6f}",
+            f"{vg_metrics['MAE']:.6f}",
+        ],
     ]
     print("\n[Regression Metrics]")
-    print(tabulate(reg_table, headers=["Variable", "R^2", "RMSE", "MAE"], tablefmt="grid"))
+    print(
+        tabulate(reg_table, headers=["Variable", "R^2", "RMSE", "MAE"], tablefmt="grid")
+    )
 
     # Physics Violation
     print("\n[Physics Consistency] (Eq. 8)")
@@ -537,6 +550,32 @@ def main(cfg: DictConfig) -> None:
         print("  Not computed (missing topology operators)")
 
     print("\n" + "=" * 70)
+
+    # ==========================================================================
+    # 8. Log evaluation results to CSV
+    # ==========================================================================
+    metrics = {
+        "R2_PG": pg_metrics["R2"],
+        "R2_VG": vg_metrics["R2"],
+        "Pacc_PG": pacc_pg,
+        "Pacc_VG": pacc_vg,
+        "RMSE_PG": pg_metrics["RMSE"],
+        "RMSE_VG": vg_metrics["RMSE"],
+        "MAE_PG": pg_metrics["MAE"],
+        "MAE_VG": vg_metrics["MAE"],
+        "Physics_Violation_MW": (
+            physics_violation_mw if not np.isnan(physics_violation_mw) else None
+        ),
+    }
+
+    log_evaluation_to_csv(
+        model_name=cfg.model.name,
+        dataset_name=cfg.data.name,
+        metrics=metrics,
+        csv_path=original_cwd / "experiments_log.csv",
+        ckpt_path=ckpt_path,
+        n_samples=n_samples,
+    )
 
 
 if __name__ == "__main__":
