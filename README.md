@@ -15,6 +15,18 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 
 ## 🚀 Recent Updates (Dec 2025)
 
+### Experiment Automation Pipeline (Dec 16, 2025)
+- **Streamlit Dashboard:** Web UI for experiment configuration and results viewing
+  - Settings tab: Model selection (GCNN/DNN), architecture params, training hyperparams
+  - Results tab: CSV-based experiment history with metrics (R², Pacc, Physics)
+  - Launch: `conda activate opf311 && python -m streamlit run app/experiment_dashboard.py`
+- **CLI Runner:** `scripts/run_experiment.py` - Unified command generator for automated experiments
+  - Supports GCNN (with two-phase physics training) and DNN models
+  - Auto parameter counting, checkpoint discovery, eval on seen+unseen data
+  - Dry-run mode: `python scripts/run_experiment.py gcnn case39 --dry-run`
+- **Experiment Logging:** CSV files at `outputs/gcnn_experiments.csv` and `outputs/dnn_experiments.csv`
+- **Data Organization:** Datasets now in `data/case39/` and `data/case6ww/`
+
 ### Node-Wise GCNN Architecture
 - **Goal:** Achieve Inductive Generalization (train on one topology, test on others).
 - **Method:** Removed the "Flattening" layer found in the original paper. Implemented a **Node-Wise Readout** where the same MLP is applied to every node independently.
@@ -97,7 +109,17 @@ opf/
 │   ├── test_topology_outages.py      # N-1 contingency verification
 │   ├── case39_baseline.py     # PYPOWER reference (39-bus)
 │   └── case57_baseline.py     # PYPOWER reference (57-bus)
-├── outputs/            # Generated files (git-ignored)
+├── app/                # Streamlit experiment dashboard
+│   ├── experiment_dashboard.py  # Main dashboard UI
+│   └── run_dashboard.py         # Helper launcher script
+├── scripts/            # Automation scripts
+│   ├── run_experiment.py        # CLI experiment runner
+│   ├── train.py                 # Hydra-based training
+│   └── evaluate.py              # Model evaluation
+├── data/               # Dataset files (git-ignored)
+│   ├── case39/                  # IEEE 39-bus (10k/2k/1.2k)
+│   └── case6ww/                 # 6-bus Wood & Wollenberg
+├── outputs/            # Generated files & experiment CSVs (git-ignored)
 ├── .github/
 │   └── copilot-instructions.md
 ├── pyrightconfig.json
@@ -113,7 +135,26 @@ opf/
 conda activate opf311
 ```
 
-### Week 4 AC-OPF (Current)
+### Experiment Dashboard (Recommended)
+```bash
+conda activate opf311
+python -m streamlit run app/experiment_dashboard.py
+```
+Open http://localhost:8501 to configure experiments and view results.
+
+### CLI Experiment Runner
+```bash
+# GCNN with two-phase training
+python scripts/run_experiment.py gcnn case39 --channels 8 --two-phase
+
+# DNN baseline
+python scripts/run_experiment.py dnn case39 --hidden_dim 128 --num_layers 3
+
+# Dry-run to preview command
+python scripts/run_experiment.py gcnn case39 --dry-run
+```
+
+### Week 4 AC-OPF
 Run the AC-OPF test harnesses:
 ```bash
 cd tests

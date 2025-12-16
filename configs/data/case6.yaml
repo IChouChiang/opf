@@ -4,8 +4,8 @@
 
 name: case6ww
 
-# Path to Case 6 data (archive_legacy_data/data contains the original Case 6 dataset)
-data_dir: legacy/gcnn_opf_01/archive_legacy_data/data
+# Path to Case 6 data
+data_dir: data/case6ww
 
 # Batch size (from train config)
 batch_size: ${train.batch_size}

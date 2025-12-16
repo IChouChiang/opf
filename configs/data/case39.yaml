@@ -11,7 +11,7 @@ n_gen: 10
 gen_bus_indices: [29, 30, 31, 32, 33, 34, 35, 36, 37, 38]
 
 # Data paths (relative to project root)
-data_dir: legacy/gcnn_opf_01/data_matlab_npz
+data_dir: data/case39
 train_file: samples_train.npz
 val_file: samples_test.npz
 test_file: samples_unseen.npz

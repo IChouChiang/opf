@@ -181,6 +181,9 @@ gcnn_opf_01/data/
 gcnn_opf_01/data_test/
 gcnn_opf_01/data_unseen/
 
+# Root data directory (unified dataset location)
+data/
+
 # Legacy folder data and results (large generated files)
 legacy/dnn_opf_02/data/
 legacy/dnn_opf_02/results/

@@ -364,6 +364,12 @@ def main(cfg: DictConfig) -> None:
     data_dir = original_cwd / cfg.data.data_dir
     feature_type = cfg.data.feature_type
 
+    # Build feature_params for graph feature slicing (same as train.py)
+    feature_params: dict | None = None
+    if feature_type == "graph" and cfg.model.name == "gcnn":
+        in_channels = cfg.model.architecture.in_channels
+        feature_params = {"feature_iterations": in_channels}
+
     datamodule = OPFDataModule(
         data_dir=str(data_dir),
         train_file=cfg.data.train_file,
@@ -372,6 +378,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=cfg.train.batch_size,
         num_workers=0,  # Use 0 for evaluation to avoid multiprocessing issues
         feature_type=feature_type,
+        feature_params=feature_params,
         pin_memory=False,
     )
 
@@ -510,7 +517,7 @@ def main(cfg: DictConfig) -> None:
         )
 
     # ==========================================================================
-    # 7. Print results table
+    # 7. Print results
     # ==========================================================================
     print("\n" + "=" * 70)
     print("EVALUATION RESULTS")
@@ -519,46 +526,23 @@ def main(cfg: DictConfig) -> None:
     print(f"Dataset: {cfg.data.name}")
     print(f"Test samples: {n_samples}")
     print(f"Checkpoint: {ckpt_path.name}")
-    print("=" * 70)
+    print("-" * 70)
 
-    # Probabilistic Accuracy Table
-    pacc_table = [
-        ["PG", f"{pacc_pg:.2f}%", f"< {PG_THRESHOLD_PU} p.u. (< 1 MW)"],
-        ["VG", f"{pacc_vg:.2f}%", f"< {VG_THRESHOLD_PU} p.u."],
-    ]
-    print("\n[Probabilistic Accuracy] (Eq. 37)")
-    print(
-        tabulate(pacc_table, headers=["Variable", "Pacc", "Threshold"], tablefmt="grid")
-    )
-
-    # Regression Metrics Table
-    reg_table = [
-        [
-            "PG (p.u.)",
-            f"{pg_metrics['R2']:.4f}",
-            f"{pg_metrics['RMSE']:.6f}",
-            f"{pg_metrics['MAE']:.6f}",
-        ],
-        [
-            "VG (p.u.)",
-            f"{vg_metrics['R2']:.4f}",
-            f"{vg_metrics['RMSE']:.6f}",
-            f"{vg_metrics['MAE']:.6f}",
-        ],
-    ]
-    print("\n[Regression Metrics]")
-    print(
-        tabulate(reg_table, headers=["Variable", "R^2", "RMSE", "MAE"], tablefmt="grid")
-    )
-
-    # Physics Violation
-    print("\n[Physics Consistency] (Eq. 8)")
+    # Simple key=value format for easy parsing
+    print(f"R2_PG={pg_metrics['R2']:.4f}")
+    print(f"R2_VG={vg_metrics['R2']:.4f}")
+    print(f"Pacc_PG={pacc_pg:.2f}")
+    print(f"Pacc_VG={pacc_vg:.2f}")
+    print(f"RMSE_PG={pg_metrics['RMSE']:.6f}")
+    print(f"RMSE_VG={vg_metrics['RMSE']:.6f}")
+    print(f"MAE_PG={pg_metrics['MAE']:.6f}")
+    print(f"MAE_VG={vg_metrics['MAE']:.6f}")
     if not np.isnan(physics_violation_mw):
-        print(f"  Active Power Mismatch (RMSE): {physics_violation_mw:.4f} MW")
+        print(f"Physics_MW={physics_violation_mw:.4f}")
     else:
-        print("  Not computed (missing topology operators)")
+        print("Physics_MW=N/A")
 
-    print("\n" + "=" * 70)
+    print("=" * 70)
 
     # ==========================================================================
     # 8. Log evaluation results to CSV

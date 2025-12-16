@@ -118,6 +118,13 @@ def instantiate_datamodule(cfg: DictConfig) -> OPFDataModule:
     # Feature type from resolved config (interpolation: ${model.feature_type})
     feature_type = cfg.data.feature_type
 
+    # Build feature_params for graph feature slicing
+    feature_params: dict | None = None
+    if feature_type == "graph" and cfg.model.name == "gcnn":
+        # Use in_channels as feature_iterations (sync model input with data)
+        in_channels = cfg.model.architecture.in_channels
+        feature_params = {"feature_iterations": in_channels}
+
     datamodule = OPFDataModule(
         data_dir=str(data_dir),
         train_file=cfg.data.train_file,
@@ -126,6 +133,7 @@ def instantiate_datamodule(cfg: DictConfig) -> OPFDataModule:
         batch_size=cfg.train.batch_size,
         num_workers=cfg.train.get("num_workers", 4),
         feature_type=feature_type,
+        feature_params=feature_params,
         pin_memory=cfg.data.get("pin_memory", True),
     )
 
@@ -133,6 +141,8 @@ def instantiate_datamodule(cfg: DictConfig) -> OPFDataModule:
         f"Instantiated OPFDataModule: data_dir={data_dir}, "
         f"feature_type={feature_type}, batch_size={cfg.train.batch_size}"
     )
+    if feature_params:
+        print(f"  feature_params: {feature_params}")
 
     return datamodule
 

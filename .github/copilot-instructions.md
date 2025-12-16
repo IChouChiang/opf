@@ -57,7 +57,47 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 - **Conda environment:** `opf311`, please always `conda activate opf311` if you found missing packages.
 - **Python executable:** `E:\DevTools\anaconda3\envs\opf311\python.exe` (Windows/Alyce)
 - Recreate via: `conda env create -f envs/environment.yml`
-- **Key packages:** pyomo, pypower, torch, gurobipy, numpy, matplotlib
+- **Key packages:** pyomo, pypower, torch, gurobipy, numpy, matplotlib, streamlit
+
+### Experiment Automation (Preferred Workflow)
+**Streamlit Dashboard:**
+```bash
+conda activate opf311
+python -m streamlit run app/experiment_dashboard.py
+```
+- Settings tab: Configure model type (GCNN/DNN), architecture, training hyperparams
+- Results tab: View experiment history from CSV logs
+- Copy generated command to terminal for execution
+
+**CLI Runner:**
+```bash
+# GCNN with physics-informed two-phase training
+python scripts/run_experiment.py gcnn case39 --channels 8 --two-phase --kappa 0.1
+
+# DNN baseline
+python scripts/run_experiment.py dnn case39 --hidden_dim 128 --num_layers 3
+
+# Dry-run to preview command without execution
+python scripts/run_experiment.py gcnn case39 --dry-run
+```
+
+**Key Files:**
+- `app/experiment_dashboard.py` - Streamlit web UI
+- `scripts/run_experiment.py` - CLI experiment runner with GCNNConfig/DNNConfig dataclasses
+- `src/deep_opf/utils/experiment_logger.py` - CSV logging with GCNN/DNN schemas
+- Logs: `outputs/gcnn_experiments.csv`, `outputs/dnn_experiments.csv`
+
+### Data Organization
+```
+data/
+  ├── case39/           # IEEE 39-bus dataset
+  │   ├── train.npz     # 10k training samples
+  │   ├── seen.npz      # 2k validation (same topology)
+  │   └── unseen.npz    # 1.2k test (different topologies)
+  └── case6ww/          # Wood & Wollenberg 6-bus
+      ├── train.npz     # 10k training samples
+      └── seen.npz      # 2k validation
+```
 
 ### File Organization
 ```
@@ -82,13 +122,26 @@ gcnn_opf_01/            # Model 01: Physics-guided GCNN
   ├── data_matlab_npz/                   # Training data (git-ignored)
   └── results/                           # Training artifacts (git-ignored)
 
-dnn_opf_03/             # Model 03: DeepOPF-FT Baseline (MLP)
+dnn_opf_03/             # Model 03: DeepOPF-FT Baseline (MLP) [LEGACY]
   ├── model_03.py                        # MLP Architecture
   ├── dataset_03.py                      # Dataset loader
   ├── train_03.py                        # Training pipeline
   ├── evaluate_03.py                     # Evaluation with Physics Loss
   ├── loss_model_03.py                   # Physics loss calculation
   └── results/                           # Training artifacts (git-ignored)
+
+app/                    # Experiment Dashboard (Streamlit)
+  ├── experiment_dashboard.py            # Main web UI
+  └── run_dashboard.py                   # Helper launcher
+
+scripts/                # Automation Scripts
+  ├── run_experiment.py                  # CLI experiment runner
+  ├── train.py                           # Hydra-based unified training
+  └── evaluate.py                        # Model evaluation
+
+data/                   # Dataset Files (git-ignored)
+  ├── case39/                            # IEEE 39-bus (10k/2k/1.2k)
+  └── case6ww/                           # 6-bus Wood & Wollenberg (10k/2k)
 
 src/
   ├── __init__.py             # Package initialization

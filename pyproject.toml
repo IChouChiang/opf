@@ -23,6 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "black",   # Code formatter
-    "pytest"   # Testing framework
+    "black",      # Code formatter
+    "pytest",     # Testing framework
+    "streamlit",  # Web dashboard for experiment management
 ]
