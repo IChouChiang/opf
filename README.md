@@ -24,8 +24,28 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
   - **Unseen Data:** Successfully predicted Voltage physics (VG R² 0.65) but failed on Active Power (PG) due to the global nature of cost optimization.
 
 ### Configuration System
-- Moved hardcoded parameters to JSON config files in `gcnn_opf_01/configs/`.
-- New parameter `model_type`: `"flattened"` (original) or `"nodewise"` (new).
+- **Legacy:** JSON config files in `gcnn_opf_01/configs/` with `model_type`: `"flattened"` (original) or `"nodewise"` (new).
+- **Hydra Integration:** Unified configuration system in `configs/` directory:
+  - `config.yaml` - Main configuration file
+  - `model/` - Model-specific configurations (DNN, GCNN)
+  - `data/` - Dataset configurations (case6, case39)
+  - Command-line overrides: `python scripts/train.py model=dnn data=case39 train.max_epochs=50`
+  - Test: `python tests/test_hydra_train.py` - Verifies Hydra configuration system integration
+
+### Unified Model Refactoring (Dec 2025)
+- **New Package:** `src/deep_opf/` - Unified deep learning framework for OPF
+- **Models:** 
+  - `AdmittanceDNN`: Fully connected network for flat feature input (legacy Model 03)
+  - `GCNN`: Physics-guided graph convolutional network (legacy Model 01)
+- **Data Loading:** 
+  - `OPFDataset`: Unified PyTorch Dataset supporting 'flat' and 'graph' feature types
+  - `OPFDataModule`: PyTorch Lightning DataModule for streamlined training
+- **Configuration:** 
+  - `configs/` - Hydra configuration system for model/data/training parameters
+  - `scripts/train.py` - Unified training script with Hydra integration
+- **Verification:** 
+  - `tests/verify_models.py` - Comprehensive model validation script
+  - `tests/test_hydra_train.py` - Hydra configuration system integration test
 
 ---
 
@@ -56,9 +76,20 @@ opf/
 │   ├── evaluate.py                  # Model evaluation
 │   └── tune_batch_size.py           # Hyperparameter tuning (with caching)
 ├── src/                # Reusable modules
+│   ├── deep_opf/        # Unified deep learning framework
+│   │   ├── data/        # Dataset and DataModule classes
+│   │   │   ├── dataset.py      # OPFDataset (flat/graph features)
+│   │   │   ├── datamodule.py   # OPFDataModule (Lightning)
+│   │   │   └── __init__.py
+│   │   ├── models/      # Neural network architectures
+│   │   │   ├── dnn.py          # AdmittanceDNN (MLP)
+│   │   │   ├── gcnn.py         # GCNN (graph convolution)
+│   │   │   └── __init__.py
+│   │   └── __init__.py
 │   ├── ac_opf_create.py       # Pyomo AbstractModel (Cartesian voltages)
 │   └── helpers_ac_opf.py      # AC-OPF helpers (data prep, init, solve)
 ├── tests/              # Test harnesses and baselines
+│   ├── verify_models.py       # DNN/GCNN model verification
 │   ├── test_case39.py         # IEEE 39-bus AC-OPF
 │   ├── test_case57.py         # IEEE 57-bus AC-OPF
 │   ├── test_feature_construction.py  # Feature construction validation
@@ -178,6 +209,9 @@ python tests/test_sample_generator.py      # �?3 scenarios, 30% RES, all optim
 
 # Topology verification
 python tests/test_topology_outages.py      # �?N-1 contingencies verified
+
+# Hydra configuration system integration test
+python tests/test_hydra_train.py           # �?Verifies Hydra configuration for DNN and GCNN models
 ```
 
 ### Status (Completed 2025-11-25)

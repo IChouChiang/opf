@@ -1,0 +1,24 @@
+# Default training configuration
+# @package train
+
+# Training mode: "standard" (with TQDM) or "ssh" (LiteProgressBar, no TQDM)
+mode: standard
+
+max_epochs: 50
+batch_size: 24  # Legacy exp_final_1000n uses 24
+lr: 1e-3
+weight_decay: 0.0  # Legacy uses 0
+patience: 10
+accelerator: auto
+devices: 1
+
+# Additional trainer settings
+num_workers: 0
+precision: 32
+gradient_clip_val: null
+accumulate_grad_batches: 1
+
+# Warm start: Path to checkpoint for two-stage training
+# If provided, weights are loaded before training (optimizer NOT loaded)
+# Usage: train.warm_start_ckpt=/path/to/phase1_checkpoint.ckpt
+warm_start_ckpt: null

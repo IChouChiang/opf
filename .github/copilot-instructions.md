@@ -1,5 +1,7 @@
 # AI Agent Instructions for OPF Project
 
+**PLEASE CODE EVERYTHING IN A PROFESSIONAL MANNER. FOLLOW BEST PRACTICES.**
+
 ## Project Overview
 This is an **Optimal Power Flow (OPF) educational project** using Python for power systems optimization and machine learning. The project has evolved from basic DC-OPF (Week 2) to AC-OPF (Week 4) and now focuses on **Physics-Informed Machine Learning** (Week 7-8).
 
@@ -52,7 +54,7 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 ## Development Workflows
 
 ### Environment Setup
-- **Conda environment:** `opf311` (shared across devices)
+- **Conda environment:** `opf311`, please always `conda activate opf311` if you found missing packages.
 - **Python executable:** `E:\DevTools\anaconda3\envs\opf311\python.exe` (Windows/Alyce)
 - Recreate via: `conda env create -f envs/environment.yml`
 - **Key packages:** pyomo, pypower, torch, gurobipy, numpy, matplotlib
@@ -232,6 +234,7 @@ c = c0                   # constant term
 
 ## Git Commit Message Convention
 
+Never commit anything without verification or permission. 
 Follow **Conventional Commits** style with prefixes:
 
 - `feat:` New feature or functionality (e.g., "feat: add AC-OPF Cartesian voltage formulation")

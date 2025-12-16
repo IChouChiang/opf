@@ -1,0 +1,38 @@
+# Main configuration file for deep_opf training
+# Uses Hydra for configuration management
+
+defaults:
+  - data: case6
+  - model: gcnn
+  - train: default
+  - _self_
+
+# Global settings
+seed: 42
+
+# Hydra output directory
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Logging and checkpointing
+logging:
+  project_name: deep_opf
+  run_name: null  # auto-generated if null
+  log_every_n_steps: 10
+
+checkpoint:
+  monitor: val/loss
+  mode: min
+  save_top_k: 1
+  save_last: true
+
+# Early stopping
+early_stopping:
+  enabled: true
+  monitor: val/loss
+  patience: 10
+  mode: min
+
+# Output directory (relative to project root)
+output_dir: outputs

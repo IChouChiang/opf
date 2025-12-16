@@ -181,6 +181,26 @@ gcnn_opf_01/data/
 gcnn_opf_01/data_test/
 gcnn_opf_01/data_unseen/
 
+# Legacy folder data and results (large generated files)
+legacy/dnn_opf_02/data/
+legacy/dnn_opf_02/results/
+legacy/dnn_opf_03/data/
+legacy/dnn_opf_03/results/
+legacy/gcnn_opf_01/data_matlab/
+legacy/gcnn_opf_01/data_matlab_npz/
+legacy/gcnn_opf_01/archive_legacy_data/
+legacy/gcnn_opf_01/data/
+legacy/gcnn_opf_01/data_test/
+legacy/gcnn_opf_01/data_unseen/
+legacy/gcnn_opf_01/results/
+
+# Model checkpoints (large .pth files)
+*.pth
+
+# PDF papers (reference only, not tracked)
+legacy/**/*.pdf
+*.pdf
+
 # Node.js / Next.js (visualization app)
 node_modules/
 .next/
@@ -188,3 +208,18 @@ out/
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+
+# ============================================================================
+# TRAINING ARTIFACTS (always ignored - reproducible from code + data)
+# ============================================================================
+# PyTorch Lightning training logs and checkpoints
+lightning_logs/
+
+# Hydra output directories (timestamped runs)
+outputs/
+
+# MLOps generated files
+current_status.txt
+experiments_log.csv
+multirun/
+experiments_log_backup.csv
