@@ -42,14 +42,16 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 - **Slack bus anchoring:** Fix slack bus `e[slack]` and `f[slack]` to eliminate rotational symmetry
 - **Warm start:** Initialize PG/QG from case data to improve Gurobi convergence
 
-### 5. ML Models (Week 7-8)
-- **Model 01 (GCNN):** Physics-Guided Graph Convolutional Neural Network.
-  - **Key Finding:** For larger grids (Case 39), "Detached Physics" (pure supervised training) currently outperforms "Active Physics" (gradient descent on physics loss) due to gradient domination issues.
-  - **Files:** `gcnn_opf_01/`
-- **Model 03 (DeepOPF-FT):** MLP Baseline.
-  - **Architecture:** Fully Connected Network taking flattened `[Pd, Qd, G, B]` as input.
-  - **Key Finding:** High accuracy on fixed topologies but poor physics consistency ($L_{phys} \approx 1.5$) and poor generalization to unseen topologies.
-  - **Files:** `dnn_opf_03/`
+### 5. ML Models (Unified Pipeline)
+- **GCNN:** Physics-Guided Graph Convolutional Neural Network
+  - Uses graph structure (adjacency from Ybus) for message passing
+  - Two heads: generator head (PG) + voltage head (VG)
+  - Physics loss couples predictions via AC power flow equations
+- **DNN:** Fully Connected Baseline (DeepOPF-style)
+  - Flattened input: `[Pd, Qd, G, B]` concatenated
+  - Good on fixed topologies, poor generalization to unseen topologies
+
+**Code Location:** `src/deep_opf/` (unified), `legacy/` (old implementations)
 
 ## Development Workflows
 
@@ -101,63 +103,37 @@ data/
 
 ### File Organization
 ```
-weekly_assignments/
-  ├── Week2/
-  │   ├── case9.py          # PYPOWER case files (data)
-  │   └── Week2.ipynb       # Exploratory notebook
-  ├── Week3/
-  │   ├── Week3.ipynb       # ML training notebook
-  │   ├── samples/          # Training data (git-ignored if large)
-  │   └── results/          # Model outputs (git-ignored)
-  ├── Week5/
-  ├── Week6/
-  └── Week7to8/
+src/deep_opf/             # Unified ML Pipeline (Primary)
+  ├── models/             # GCNN and DNN architectures
+  ├── loss/               # Physics-informed loss functions
+  ├── data/               # DataModule and loaders
+  ├── utils/              # Helpers (logging, plotting)
+  └── task.py             # PyTorch Lightning training task
 
-gcnn_opf_01/            # Model 01: Physics-guided GCNN
-  ├── model_01.py                        # 2-head GCNN: gen_head + v_head
-  ├── loss_model_01.py                   # Physics-informed loss (correlative)
-  ├── feature_construction_model_01.py   # k-iteration voltage estimation
-  ├── train.py                           # Training pipeline
-  ├── evaluate.py                        # Model evaluation
-  ├── data_matlab_npz/                   # Training data (git-ignored)
-  └── results/                           # Training artifacts (git-ignored)
+legacy/                   # Old implementations (reference only)
+  ├── gcnn_opf_01/        # Original GCNN implementation
+  ├── dnn_opf_02/         # DNN variant 02
+  ├── dnn_opf_03/         # DeepOPF-FT baseline
+  └── weekly_assignments/ # Course notebooks
 
-dnn_opf_03/             # Model 03: DeepOPF-FT Baseline (MLP) [LEGACY]
-  ├── model_03.py                        # MLP Architecture
-  ├── dataset_03.py                      # Dataset loader
-  ├── train_03.py                        # Training pipeline
-  ├── evaluate_03.py                     # Evaluation with Physics Loss
-  ├── loss_model_03.py                   # Physics loss calculation
-  └── results/                           # Training artifacts (git-ignored)
+app/                      # Experiment Dashboard (Streamlit)
+  └── experiment_dashboard.py
 
-app/                    # Experiment Dashboard (Streamlit)
-  ├── experiment_dashboard.py            # Main web UI
-  └── run_dashboard.py                   # Helper launcher
+scripts/                  # Automation Scripts
+  ├── run_experiment.py   # CLI experiment runner (recommended)
+  ├── train.py            # Hydra-based training
+  └── evaluate.py         # Model evaluation
 
-scripts/                # Automation Scripts
-  ├── run_experiment.py                  # CLI experiment runner
-  ├── train.py                           # Hydra-based unified training
-  └── evaluate.py                        # Model evaluation
+data/                     # Dataset Files (git-ignored)
+  ├── case39/             # IEEE 39-bus (10k/2k/1.2k samples)
+  └── case6ww/            # 6-bus Wood & Wollenberg
 
-data/                   # Dataset Files (git-ignored)
-  ├── case39/                            # IEEE 39-bus (10k/2k/1.2k)
-  └── case6ww/                           # 6-bus Wood & Wollenberg (10k/2k)
+outputs/                  # Experiment outputs
+  ├── gcnn_experiments.csv  # GCNN results log (tracked)
+  ├── dnn_experiments.csv   # DNN results log (tracked)
+  └── */                    # Training artifacts (git-ignored)
 
-src/
-  ├── __init__.py             # Package initialization
-  ├── ac_opf_create.py        # Pyomo AbstractModel (Cartesian voltages)
-  ├── helpers_ac_opf.py       # AC-OPF helpers (data prep, init, solve)
-  ├── topology_viz.py         # Static network visualization
-  └── interactive_viz.py      # Interactive network visualization (PyVis)
-
-tests/
-  ├── test_case39.py                # IEEE 39-bus AC-OPF test harness
-  ├── test_case57.py                # IEEE 57-bus AC-OPF test harness
-  ├── test_feature_construction.py  # Feature construction validation
-  ├── test_sample_generator.py      # Scenario generator + AC-OPF integration
-  └── test_topology_outages.py      # N-1 contingency verification
-
-outputs/                      # Generated files (git-ignored)
+lightning_logs/           # PyTorch Lightning checkpoints (git-ignored)
 ```
 
 ### Running AC-OPF (Week 4 / tests/)
@@ -203,14 +179,41 @@ python gcnn_opf_01/evaluate.py --model_path gcnn_opf_01/results/best_model.pth
 python dnn_opf_03/train_03.py --config dnn_opf_03/configs/exp_tiny_17k.json
 ```
 
-**Evaluation (with Physics Loss):**
-```bash
-python dnn_opf_03/evaluate_03.py --model_path dnn_opf_03/results/best_model.pth --data_dir gcnn_opf_01/data_matlab_npz
-```
-
 ### Type Checking with Pyright
 - Config: `pyrightconfig.json` at root
 - **Disable Pyomo type warnings:** Add `# pyright: reportAttributeAccessIssue=false` to avoid false positives on Pyomo dynamic attributes
+
+## Evaluation Metrics
+
+### Supervised Metrics
+- **R² (R-squared):** Coefficient of determination. 1.0 = perfect, 0.0 = predicts mean.
+- **RMSE (Root Mean Square Error):** In p.u. units.
+- **MAE (Mean Absolute Error):** In p.u. units.
+
+### Probabilistic Accuracy (Pacc) - Eq. 37
+$$P_{acc} = P(|pred - label| < \epsilon) \times 100\%$$
+
+| Variable | Threshold ε | Physical Meaning |
+|----------|-------------|------------------|
+| PG | 0.01 p.u. | 1 MW (BaseMVA=100) |
+| VG | 0.01 p.u. | 0.01 p.u. voltage |
+
+**Computed over all elements:** For Case39 (10 gens × 2000 samples = 20,000 comparisons).
+**1 MW threshold is strict:** Only ~0.32% of mean generator output (~311 MW).
+
+### Physics Violation (Physics_MW)
+$$Physics_{MW} = RMSE(A_{g2b} \cdot PG_{pred}, P_{from\_V}) \times BaseMVA$$
+
+- **What it measures:** Mismatch between predicted PG and PG implied by predicted voltage via AC power flow equations.
+- **Good values:** < 50 MW (physically consistent)
+- **Bad values:** > 200 MW (predictions violate physics badly)
+- **Interpretation:** 300 MW physics violation with 311 MW mean output = ~96% mismatch = very poor!
+
+### Physics Loss Trade-off
+Using κ > 0 in training:
+- **Decreases supervised accuracy** (R², Pacc) - model compromises to satisfy both objectives
+- **Decreases physics violation** - predictions are more physically consistent
+- **Recommended:** Small κ (0.01-0.1) for balance; a solution with R²=0.95 + Physics_MW=50 is more useful than R²=0.99 + Physics_MW=300
 
 ## Project-Specific Rules
 

@@ -23,7 +23,9 @@ Usage:
 """
 
 import argparse
+import itertools
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -44,6 +46,68 @@ from deep_opf.utils.experiment_logger import (
     log_dnn_experiment,
     log_gcnn_experiment,
 )
+
+
+# =============================================================================
+# Sweep Utilities
+# =============================================================================
+def parse_sweep_param(value_str: str, param_type: type = float) -> list:
+    """
+    Parse a potentially comma-separated parameter string into a list of values.
+
+    Args:
+        value_str: String like "8" or "8,16,32" or "8, 16, 32"
+        param_type: Type to convert each value (int or float)
+
+    Returns:
+        List of parsed values
+
+    Raises:
+        ValueError: If any value cannot be parsed
+    """
+    # Split by comma and optional whitespace
+    parts = re.split(r"\s*,\s*", value_str.strip())
+    values = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            values.append(param_type(part))
+        except ValueError:
+            raise ValueError(f"Invalid {param_type.__name__} value: '{part}'")
+    return values if values else [param_type(value_str)]
+
+
+def is_sweep_value(value_str: str) -> bool:
+    """Check if a parameter string contains multiple values (comma-separated)."""
+    return "," in str(value_str)
+
+
+def expand_combinations(params_dict: dict) -> list[dict]:
+    """
+    Expand a dict of potentially multi-value params into all combinations.
+
+    Args:
+        params_dict: {"channels": [8,16], "batch_size": [32,64]}
+
+    Returns:
+        [{"channels": 8, "batch_size": 32}, {"channels": 8, "batch_size": 64}, ...]
+    """
+    keys = list(params_dict.keys())
+    value_lists = [
+        params_dict[k] if isinstance(params_dict[k], list) else [params_dict[k]]
+        for k in keys
+    ]
+
+    combinations = list(itertools.product(*value_lists))
+    return [dict(zip(keys, combo)) for combo in combinations]
+
+
+def format_sweep_progress(current: int, total: int, params: dict) -> str:
+    """Format progress string for sweep mode."""
+    param_str = ", ".join(f"{k}={v}" for k, v in params.items())
+    return f"[{current}/{total}] {param_str}"
 
 
 # =============================================================================
@@ -77,6 +141,10 @@ class GCNNConfig:
     phase1_epochs: int = 50
     phase2_epochs: int = 100
     kappa: float = 0.1  # Physics loss weight for phase 2
+
+    # Phase 2 only mode (resume from existing checkpoint)
+    phase2_only: bool = False
+    warm_start_ckpt: str = ""
 
     # GPU
     gpu: int = 0
@@ -219,6 +287,7 @@ def generate_eval_command(
     # DNN architecture params
     hidden_dim: int | None = None,
     num_layers: int | None = None,
+    dropout: float | None = None,
 ) -> str:
     """Generate Hydra command for evaluation."""
     data_cfg = DATASET_INFO[dataset]["config_name"]
@@ -252,6 +321,8 @@ def generate_eval_command(
             cmd_parts.append(f"model.architecture.hidden_dim={hidden_dim}")
         if num_layers is not None:
             cmd_parts.append(f"model.architecture.num_layers={num_layers}")
+        if dropout is not None:
+            cmd_parts.append(f"model.architecture.dropout={dropout}")
 
     return " ".join(cmd_parts)
 
@@ -259,6 +330,26 @@ def generate_eval_command(
 # =============================================================================
 # Subprocess Execution with Interrupt Handling
 # =============================================================================
+def get_latest_version_number(log_dir: Path = Path("lightning_logs")) -> int:
+    """Get the highest version number in lightning_logs directory."""
+    if not log_dir.exists():
+        return -1
+
+    version_dirs = list(log_dir.glob("version_*"))
+    if not version_dirs:
+        return -1
+
+    version_nums = []
+    for d in version_dirs:
+        try:
+            num = int(d.name.split("_")[1])
+            version_nums.append(num)
+        except (IndexError, ValueError):
+            continue
+
+    return max(version_nums) if version_nums else -1
+
+
 def run_command(cmd: str, gpu: int = 0) -> tuple[int, str]:
     """
     Run a command with GPU selection and interrupt handling.
@@ -317,6 +408,43 @@ def find_latest_checkpoint(search_dirs: list[Path] | None = None) -> Optional[Pa
     return all_ckpt_files[0]
 
 
+def find_checkpoint_in_version(
+    version_num: int, log_dir: Path = Path("lightning_logs")
+) -> Optional[Path]:
+    """
+    Find the best checkpoint in a specific version directory.
+
+    This is more robust than find_latest_checkpoint when running multiple
+    training jobs in parallel.
+
+    Args:
+        version_num: The version number to look for
+        log_dir: Base lightning_logs directory
+
+    Returns:
+        Path to checkpoint, or None if not found
+    """
+    version_dir = log_dir / f"version_{version_num}"
+    if not version_dir.exists():
+        return None
+
+    ckpt_dir = version_dir / "checkpoints"
+    if not ckpt_dir.exists():
+        return None
+
+    # Find best checkpoint (not last.ckpt)
+    ckpt_files = [p for p in ckpt_dir.glob("*.ckpt") if "last" not in p.name]
+
+    if not ckpt_files:
+        # Fall back to last.ckpt
+        last_ckpt = ckpt_dir / "last.ckpt"
+        return last_ckpt if last_ckpt.exists() else None
+
+    # If multiple, sort by modification time (newest first)
+    ckpt_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return ckpt_files[0]
+
+
 def extract_best_loss_from_ckpt(ckpt_path: Path) -> float:
     """Extract val_loss from checkpoint filename."""
     # Pattern: epoch=X-val_loss=Y.ckpt
@@ -347,6 +475,7 @@ def run_evaluation(
     # DNN architecture
     hidden_dim: int | None = None,
     num_layers: int | None = None,
+    dropout: float | None = None,
 ) -> dict:
     """
     Run evaluation and return metrics.
@@ -365,6 +494,7 @@ def run_evaluation(
         n_fc_layers=n_fc_layers,
         hidden_dim=hidden_dim,
         num_layers=num_layers,
+        dropout=dropout,
     )
 
     env = os.environ.copy()
@@ -468,7 +598,12 @@ def run_gcnn_experiment(cfg: GCNNConfig) -> None:
         f"weight_decay={cfg.weight_decay}, patience={cfg.patience}, dropout={cfg.dropout}"
     )
 
-    if cfg.two_phase:
+    if cfg.phase2_only:
+        print(
+            f"  Phase 2 Only: max_epochs={cfg.max_epochs}, kappa={cfg.kappa} (warm-start)"
+        )
+        print(f"  Warm start: {cfg.warm_start_ckpt}")
+    elif cfg.two_phase:
         print(f"  Phase 1: max_epochs={cfg.phase1_epochs}, kappa=0.0")
         print(
             f"  Phase 2: max_epochs={cfg.phase2_epochs}, kappa={cfg.kappa} (warm-start)"
@@ -492,7 +627,116 @@ def run_gcnn_experiment(cfg: GCNNConfig) -> None:
         return
 
     # Generate commands
-    if cfg.two_phase:
+    if cfg.phase2_only:
+        # Phase 2 only - use provided checkpoint
+        if not cfg.warm_start_ckpt:
+            print("[ERROR] --warm_start_ckpt required for --phase2-only mode")
+            return
+
+        ckpt_path1 = Path(cfg.warm_start_ckpt)
+        if not ckpt_path1.exists():
+            print(f"[ERROR] Checkpoint not found: {ckpt_path1}")
+            return
+
+        print("\n" + "=" * 70)
+        print(f"PHASE 2 ONLY: Physics-Informed Training (kappa={cfg.kappa})")
+        print("=" * 70)
+        print(f"Using checkpoint: {ckpt_path1}")
+
+        cmd2 = generate_gcnn_train_command(
+            cfg, cfg.max_epochs, kappa=cfg.kappa, warm_start_ckpt=str(ckpt_path1)
+        )
+        print(f"Command: {cmd2}")
+
+        # Track version number before training
+        version_before = get_latest_version_number()
+
+        start_time = time.time()
+        ret_code, _ = run_command(cmd2, cfg.gpu)
+        duration2 = time.time() - start_time
+
+        # Find Phase 2 checkpoint in expected version
+        expected_version = version_before + 1
+        ckpt_path2 = find_checkpoint_in_version(expected_version)
+        if ckpt_path2 is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version}, falling back"
+            )
+            ckpt_path2 = find_latest_checkpoint()
+        if ckpt_path2 is None:
+            print("[ERROR] No checkpoint found after Phase 2 training")
+            return
+
+        print(f"Phase 2 checkpoint: {ckpt_path2}")
+        best_loss2 = extract_best_loss_from_ckpt(ckpt_path2)
+
+        # Evaluate Phase 2
+        metrics_seen2 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path2),
+            "samples_test.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        metrics_unseen2 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path2),
+            "samples_unseen.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+
+        # Log Phase 2 Only
+        row2 = ExperimentRow("gcnn")
+        row2.set_architecture(
+            params=n_params,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        row2.set_training_config(
+            dataset=cfg.dataset,
+            batch_size=cfg.batch_size,
+            lr=cfg.lr,
+            weight_decay=cfg.weight_decay,
+            patience=cfg.patience,
+            dropout=cfg.dropout,
+            max_epochs=cfg.max_epochs,
+            kappa=cfg.kappa,
+            phase=2,
+        )
+        row2.set_training_results(
+            best_val_loss=best_loss2,
+            duration_sec=duration2,
+            ckpt_path=ckpt_path2,
+            log_dir=ckpt_path2.parent.parent,
+        )
+        row2.set_eval_seen(
+            r2_pg=metrics_seen2["R2_PG"],
+            r2_vg=metrics_seen2["R2_VG"],
+            pacc_pg=metrics_seen2["Pacc_PG"],
+            pacc_vg=metrics_seen2["Pacc_VG"],
+            physics_mw=metrics_seen2["Physics_MW"],
+        )
+        row2.set_eval_unseen(
+            r2_pg=metrics_unseen2["R2_PG"],
+            r2_vg=metrics_unseen2["R2_VG"],
+            pacc_pg=metrics_unseen2["Pacc_PG"],
+            pacc_vg=metrics_unseen2["Pacc_VG"],
+            physics_mw=metrics_unseen2["Physics_MW"],
+        )
+        log_gcnn_experiment(row2)
+
+    elif cfg.two_phase:
         # Phase 1
         print("\n" + "=" * 70)
         print("PHASE 1: Supervised Training (kappa=0.0)")
@@ -501,12 +745,21 @@ def run_gcnn_experiment(cfg: GCNNConfig) -> None:
         cmd1 = generate_gcnn_train_command(cfg, cfg.phase1_epochs, kappa=0.0)
         print(f"Command: {cmd1}")
 
+        # Track version number before training
+        version_before_p1 = get_latest_version_number()
+
         start_time = time.time()
         ret_code, _ = run_command(cmd1, cfg.gpu)
         duration1 = time.time() - start_time
 
-        # Find checkpoint
-        ckpt_path1 = find_latest_checkpoint()
+        # Find Phase 1 checkpoint in expected version
+        expected_version_p1 = version_before_p1 + 1
+        ckpt_path1 = find_checkpoint_in_version(expected_version_p1)
+        if ckpt_path1 is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version_p1}, falling back"
+            )
+            ckpt_path1 = find_latest_checkpoint()
         if ckpt_path1 is None:
             print("[ERROR] No checkpoint found after Phase 1 training")
             return
@@ -590,12 +843,21 @@ def run_gcnn_experiment(cfg: GCNNConfig) -> None:
         )
         print(f"Command: {cmd2}")
 
+        # Track version number before Phase 2 training
+        version_before_p2 = get_latest_version_number()
+
         start_time = time.time()
         ret_code, _ = run_command(cmd2, cfg.gpu)
         duration2 = time.time() - start_time
 
-        # Find Phase 2 checkpoint
-        ckpt_path2 = find_latest_checkpoint()
+        # Find Phase 2 checkpoint in expected version
+        expected_version_p2 = version_before_p2 + 1
+        ckpt_path2 = find_checkpoint_in_version(expected_version_p2)
+        if ckpt_path2 is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version_p2}, falling back"
+            )
+            ckpt_path2 = find_latest_checkpoint()
         if ckpt_path2 is None:
             print("[ERROR] No checkpoint found after Phase 2 training")
             return
@@ -674,12 +936,24 @@ def run_gcnn_experiment(cfg: GCNNConfig) -> None:
         cmd = generate_gcnn_train_command(cfg, cfg.max_epochs, kappa=cfg.kappa)
         print(f"\nCommand: {cmd}")
 
+        # Track version number before training
+        version_before = get_latest_version_number()
+
         start_time = time.time()
         ret_code, _ = run_command(cmd, cfg.gpu)
         duration = time.time() - start_time
 
-        # Find checkpoint
-        ckpt_path = find_latest_checkpoint()
+        # Find checkpoint in the new version directory (version_before + 1)
+        expected_version = version_before + 1
+        ckpt_path = find_checkpoint_in_version(expected_version)
+
+        # Fallback to global search if version-specific search fails
+        if ckpt_path is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version}, falling back to global search"
+            )
+            ckpt_path = find_latest_checkpoint()
+
         if ckpt_path is None:
             print("[ERROR] No checkpoint found after training")
             return
@@ -804,12 +1078,21 @@ def run_dnn_experiment(cfg: DNNConfig) -> None:
     cmd = generate_dnn_train_command(cfg)
     print(f"\nCommand: {cmd}")
 
+    # Track version number before training
+    version_before = get_latest_version_number()
+
     start_time = time.time()
     ret_code, _ = run_command(cmd, cfg.gpu)
     duration = time.time() - start_time
 
-    # Find checkpoint
-    ckpt_path = find_latest_checkpoint()
+    # Find checkpoint in expected version
+    expected_version = version_before + 1
+    ckpt_path = find_checkpoint_in_version(expected_version)
+    if ckpt_path is None:
+        print(
+            f"[WARN] Checkpoint not found in version_{expected_version}, falling back"
+        )
+        ckpt_path = find_latest_checkpoint()
     if ckpt_path is None:
         print("[ERROR] No checkpoint found after training")
         return
@@ -826,6 +1109,7 @@ def run_dnn_experiment(cfg: DNNConfig) -> None:
         cfg.gpu,
         hidden_dim=cfg.hidden_dim,
         num_layers=cfg.num_layers,
+        dropout=cfg.dropout,
     )
 
     # Evaluate on unseen dataset (DNN may not have unseen data)
@@ -838,6 +1122,7 @@ def run_dnn_experiment(cfg: DNNConfig) -> None:
             cfg.gpu,
             hidden_dim=cfg.hidden_dim,
             num_layers=cfg.num_layers,
+            dropout=cfg.dropout,
         )
     except Exception:
         metrics_unseen = {
@@ -893,6 +1178,494 @@ def run_dnn_experiment(cfg: DNNConfig) -> None:
 
 
 # =============================================================================
+# No-Confirm Versions for Sweep Mode
+# =============================================================================
+def run_gcnn_experiment_no_confirm(cfg: GCNNConfig) -> None:
+    """Run GCNN experiment without confirmation prompt (for sweep mode)."""
+    n_params = count_gcnn_params(cfg)
+
+    print(f"Model: GCNN, Dataset: {cfg.dataset}, Params: {n_params:,}")
+    print(
+        f"  Architecture: channels={cfg.channels}, n_layers={cfg.n_layers}, "
+        f"fc_hidden_dim={cfg.fc_hidden_dim}, n_fc_layers={cfg.n_fc_layers}"
+    )
+    print(
+        f"  Training: batch_size={cfg.batch_size}, max_epochs={cfg.max_epochs}, kappa={cfg.kappa}"
+    )
+
+    if cfg.phase2_only:
+        # Phase 2 only - use provided checkpoint
+        if not cfg.warm_start_ckpt:
+            print("[ERROR] --warm_start_ckpt required for --phase2-only mode")
+            return
+
+        ckpt_path1 = Path(cfg.warm_start_ckpt)
+        if not ckpt_path1.exists():
+            print(f"[ERROR] Checkpoint not found: {ckpt_path1}")
+            return
+
+        print(f"\n  Phase 2 Only: Using checkpoint {ckpt_path1}")
+        cmd2 = generate_gcnn_train_command(
+            cfg, cfg.max_epochs, kappa=cfg.kappa, warm_start_ckpt=str(ckpt_path1)
+        )
+
+        # Track version number before training
+        version_before = get_latest_version_number()
+
+        start_time = time.time()
+        run_command(cmd2, cfg.gpu)
+        duration2 = time.time() - start_time
+
+        # Find checkpoint in expected version
+        expected_version = version_before + 1
+        ckpt_path2 = find_checkpoint_in_version(expected_version)
+        if ckpt_path2 is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version}, falling back"
+            )
+            ckpt_path2 = find_latest_checkpoint()
+        if ckpt_path2 is None:
+            print("[ERROR] No checkpoint found after Phase 2")
+            return
+
+        best_loss2 = extract_best_loss_from_ckpt(ckpt_path2)
+        metrics_seen2 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path2),
+            "samples_test.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        metrics_unseen2 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path2),
+            "samples_unseen.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+
+        row2 = ExperimentRow("gcnn")
+        row2.set_architecture(
+            params=n_params,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        row2.set_training_config(
+            dataset=cfg.dataset,
+            batch_size=cfg.batch_size,
+            lr=cfg.lr,
+            weight_decay=cfg.weight_decay,
+            patience=cfg.patience,
+            dropout=cfg.dropout,
+            max_epochs=cfg.max_epochs,
+            kappa=cfg.kappa,
+            phase=2,
+        )
+        row2.set_training_results(
+            best_val_loss=best_loss2,
+            duration_sec=duration2,
+            ckpt_path=ckpt_path2,
+            log_dir=ckpt_path2.parent.parent,
+        )
+        row2.set_eval_seen(
+            r2_pg=metrics_seen2["R2_PG"],
+            r2_vg=metrics_seen2["R2_VG"],
+            pacc_pg=metrics_seen2["Pacc_PG"],
+            pacc_vg=metrics_seen2["Pacc_VG"],
+            physics_mw=metrics_seen2["Physics_MW"],
+        )
+        row2.set_eval_unseen(
+            r2_pg=metrics_unseen2["R2_PG"],
+            r2_vg=metrics_unseen2["R2_VG"],
+            pacc_pg=metrics_unseen2["Pacc_PG"],
+            pacc_vg=metrics_unseen2["Pacc_VG"],
+            physics_mw=metrics_unseen2["Physics_MW"],
+        )
+        log_gcnn_experiment(row2)
+
+    elif cfg.two_phase:
+        # Phase 1
+        print(f"\n  Phase 1: Supervised (kappa=0.0)")
+        cmd1 = generate_gcnn_train_command(cfg, cfg.phase1_epochs, kappa=0.0)
+
+        # Track version number before training
+        version_before_p1 = get_latest_version_number()
+
+        start_time = time.time()
+        run_command(cmd1, cfg.gpu)
+        duration1 = time.time() - start_time
+
+        # Find checkpoint in expected version
+        expected_version_p1 = version_before_p1 + 1
+        ckpt_path1 = find_checkpoint_in_version(expected_version_p1)
+        if ckpt_path1 is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version_p1}, falling back"
+            )
+            ckpt_path1 = find_latest_checkpoint()
+        if ckpt_path1 is None:
+            print("[ERROR] No checkpoint found after Phase 1")
+            return
+
+        best_loss1 = extract_best_loss_from_ckpt(ckpt_path1)
+        metrics_seen1 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path1),
+            "samples_test.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        metrics_unseen1 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path1),
+            "samples_unseen.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+
+        # Log Phase 1
+        row1 = ExperimentRow("gcnn")
+        row1.set_architecture(
+            params=n_params,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        row1.set_training_config(
+            dataset=cfg.dataset,
+            batch_size=cfg.batch_size,
+            lr=cfg.lr,
+            weight_decay=cfg.weight_decay,
+            patience=cfg.patience,
+            dropout=cfg.dropout,
+            max_epochs=cfg.phase1_epochs,
+            kappa=0.0,
+            phase=1,
+        )
+        row1.set_training_results(
+            best_val_loss=best_loss1,
+            duration_sec=duration1,
+            ckpt_path=ckpt_path1,
+            log_dir=ckpt_path1.parent.parent,
+        )
+        row1.set_eval_seen(
+            r2_pg=metrics_seen1["R2_PG"],
+            r2_vg=metrics_seen1["R2_VG"],
+            pacc_pg=metrics_seen1["Pacc_PG"],
+            pacc_vg=metrics_seen1["Pacc_VG"],
+            physics_mw=metrics_seen1["Physics_MW"],
+        )
+        row1.set_eval_unseen(
+            r2_pg=metrics_unseen1["R2_PG"],
+            r2_vg=metrics_unseen1["R2_VG"],
+            pacc_pg=metrics_unseen1["Pacc_PG"],
+            pacc_vg=metrics_unseen1["Pacc_VG"],
+            physics_mw=metrics_unseen1["Physics_MW"],
+        )
+        log_gcnn_experiment(row1)
+
+        # Phase 2
+        print(f"\n  Phase 2: Physics-Informed (kappa={cfg.kappa})")
+        cmd2 = generate_gcnn_train_command(
+            cfg, cfg.phase2_epochs, kappa=cfg.kappa, warm_start_ckpt=str(ckpt_path1)
+        )
+
+        # Track version number before Phase 2
+        version_before_p2 = get_latest_version_number()
+
+        start_time = time.time()
+        run_command(cmd2, cfg.gpu)
+        duration2 = time.time() - start_time
+
+        # Find checkpoint in expected version
+        expected_version_p2 = version_before_p2 + 1
+        ckpt_path2 = find_checkpoint_in_version(expected_version_p2)
+        if ckpt_path2 is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version_p2}, falling back"
+            )
+            ckpt_path2 = find_latest_checkpoint()
+        if ckpt_path2 is None:
+            print("[ERROR] No checkpoint found after Phase 2")
+            return
+
+        best_loss2 = extract_best_loss_from_ckpt(ckpt_path2)
+        metrics_seen2 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path2),
+            "samples_test.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        metrics_unseen2 = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path2),
+            "samples_unseen.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+
+        # Log Phase 2
+        row2 = ExperimentRow("gcnn")
+        row2.set_architecture(
+            params=n_params,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        row2.set_training_config(
+            dataset=cfg.dataset,
+            batch_size=cfg.batch_size,
+            lr=cfg.lr,
+            weight_decay=cfg.weight_decay,
+            patience=cfg.patience,
+            dropout=cfg.dropout,
+            max_epochs=cfg.phase2_epochs,
+            kappa=cfg.kappa,
+            phase=2,
+        )
+        row2.set_training_results(
+            best_val_loss=best_loss2,
+            duration_sec=duration2,
+            ckpt_path=ckpt_path2,
+            log_dir=ckpt_path2.parent.parent,
+        )
+        row2.set_eval_seen(
+            r2_pg=metrics_seen2["R2_PG"],
+            r2_vg=metrics_seen2["R2_VG"],
+            pacc_pg=metrics_seen2["Pacc_PG"],
+            pacc_vg=metrics_seen2["Pacc_VG"],
+            physics_mw=metrics_seen2["Physics_MW"],
+        )
+        row2.set_eval_unseen(
+            r2_pg=metrics_unseen2["R2_PG"],
+            r2_vg=metrics_unseen2["R2_VG"],
+            pacc_pg=metrics_unseen2["Pacc_PG"],
+            pacc_vg=metrics_unseen2["Pacc_VG"],
+            physics_mw=metrics_unseen2["Physics_MW"],
+        )
+        log_gcnn_experiment(row2)
+    else:
+        # Single phase
+        cmd = generate_gcnn_train_command(cfg, cfg.max_epochs, kappa=cfg.kappa)
+
+        # Track version number before training
+        version_before = get_latest_version_number()
+
+        start_time = time.time()
+        run_command(cmd, cfg.gpu)
+        duration = time.time() - start_time
+
+        # Find checkpoint in expected version
+        expected_version = version_before + 1
+        ckpt_path = find_checkpoint_in_version(expected_version)
+        if ckpt_path is None:
+            print(
+                f"[WARN] Checkpoint not found in version_{expected_version}, falling back"
+            )
+            ckpt_path = find_latest_checkpoint()
+        if ckpt_path is None:
+            print("[ERROR] No checkpoint found")
+            return
+
+        best_loss = extract_best_loss_from_ckpt(ckpt_path)
+        metrics_seen = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path),
+            "samples_test.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        metrics_unseen = run_evaluation(
+            "gcnn",
+            cfg.dataset,
+            str(ckpt_path),
+            "samples_unseen.npz",
+            cfg.gpu,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+
+        # Log experiment
+        row = ExperimentRow("gcnn")
+        row.set_architecture(
+            params=n_params,
+            channels=cfg.channels,
+            n_layers=cfg.n_layers,
+            fc_hidden_dim=cfg.fc_hidden_dim,
+            n_fc_layers=cfg.n_fc_layers,
+        )
+        row.set_training_config(
+            dataset=cfg.dataset,
+            batch_size=cfg.batch_size,
+            lr=cfg.lr,
+            weight_decay=cfg.weight_decay,
+            patience=cfg.patience,
+            dropout=cfg.dropout,
+            max_epochs=cfg.max_epochs,
+            kappa=cfg.kappa,
+            phase=1,
+        )
+        row.set_training_results(
+            best_val_loss=best_loss,
+            duration_sec=duration,
+            ckpt_path=ckpt_path,
+            log_dir=ckpt_path.parent.parent,
+        )
+        row.set_eval_seen(
+            r2_pg=metrics_seen["R2_PG"],
+            r2_vg=metrics_seen["R2_VG"],
+            pacc_pg=metrics_seen["Pacc_PG"],
+            pacc_vg=metrics_seen["Pacc_VG"],
+            physics_mw=metrics_seen["Physics_MW"],
+        )
+        row.set_eval_unseen(
+            r2_pg=metrics_unseen["R2_PG"],
+            r2_vg=metrics_unseen["R2_VG"],
+            pacc_pg=metrics_unseen["Pacc_PG"],
+            pacc_vg=metrics_unseen["Pacc_VG"],
+            physics_mw=metrics_unseen["Physics_MW"],
+        )
+        log_gcnn_experiment(row)
+
+    print("  ✓ Logged to CSV")
+
+
+def run_dnn_experiment_no_confirm(cfg: DNNConfig) -> None:
+    """Run DNN experiment without confirmation prompt (for sweep mode)."""
+    n_params = count_dnn_params(cfg)
+
+    print(f"Model: DNN, Dataset: {cfg.dataset}, Params: {n_params:,}")
+    print(f"  Architecture: hidden_dim={cfg.hidden_dim}, num_layers={cfg.num_layers}")
+    print(f"  Training: batch_size={cfg.batch_size}, max_epochs={cfg.max_epochs}")
+
+    cmd = generate_dnn_train_command(cfg)
+
+    # Track version number before training
+    version_before = get_latest_version_number()
+
+    start_time = time.time()
+    run_command(cmd, cfg.gpu)
+    duration = time.time() - start_time
+
+    # Find checkpoint in expected version
+    expected_version = version_before + 1
+    ckpt_path = find_checkpoint_in_version(expected_version)
+    if ckpt_path is None:
+        print(
+            f"[WARN] Checkpoint not found in version_{expected_version}, falling back"
+        )
+        ckpt_path = find_latest_checkpoint()
+    if ckpt_path is None:
+        print("[ERROR] No checkpoint found")
+        return
+
+    best_loss = extract_best_loss_from_ckpt(ckpt_path)
+    metrics_seen = run_evaluation(
+        "dnn",
+        cfg.dataset,
+        str(ckpt_path),
+        "samples_test.npz",
+        cfg.gpu,
+        hidden_dim=cfg.hidden_dim,
+        num_layers=cfg.num_layers,
+        dropout=cfg.dropout,
+    )
+
+    try:
+        metrics_unseen = run_evaluation(
+            "dnn",
+            cfg.dataset,
+            str(ckpt_path),
+            "samples_unseen.npz",
+            cfg.gpu,
+            hidden_dim=cfg.hidden_dim,
+            num_layers=cfg.num_layers,
+            dropout=cfg.dropout,
+        )
+    except Exception:
+        metrics_unseen = {
+            "R2_PG": 0.0,
+            "R2_VG": 0.0,
+            "Pacc_PG": 0.0,
+            "Pacc_VG": 0.0,
+            "Physics_MW": 0.0,
+        }
+
+    # Log experiment
+    row = ExperimentRow("dnn")
+    row.set_architecture(
+        params=n_params, hidden_dim=cfg.hidden_dim, num_layers=cfg.num_layers
+    )
+    row.set_training_config(
+        dataset=cfg.dataset,
+        batch_size=cfg.batch_size,
+        lr=cfg.lr,
+        weight_decay=cfg.weight_decay,
+        patience=cfg.patience,
+        dropout=cfg.dropout,
+        max_epochs=cfg.max_epochs,
+    )
+    row.set_training_results(
+        best_val_loss=best_loss,
+        duration_sec=duration,
+        ckpt_path=ckpt_path,
+        log_dir=ckpt_path.parent.parent,
+    )
+    row.set_eval_seen(
+        r2_pg=metrics_seen["R2_PG"],
+        r2_vg=metrics_seen["R2_VG"],
+        pacc_pg=metrics_seen["Pacc_PG"],
+        pacc_vg=metrics_seen["Pacc_VG"],
+        physics_mw=metrics_seen["Physics_MW"],
+    )
+    row.set_eval_unseen(
+        r2_pg=metrics_unseen["R2_PG"],
+        r2_vg=metrics_unseen["R2_VG"],
+        pacc_pg=metrics_unseen["Pacc_PG"],
+        pacc_vg=metrics_unseen["Pacc_VG"],
+        physics_mw=metrics_unseen["Physics_MW"],
+    )
+    log_dnn_experiment(row)
+
+    print("  ✓ Logged to CSV")
+
+
+# =============================================================================
 # CLI Argument Parser
 # =============================================================================
 def parse_args() -> argparse.Namespace:
@@ -932,34 +1705,58 @@ Examples:
         help="GPU device ID (default: 0)",
     )
 
-    # Common training params
-    parser.add_argument("--batch_size", type=int, default=32)
+    # Common training params (sweepable - accept strings)
+    parser.add_argument(
+        "--batch_size", type=str, default="32", help="Batch size (sweep: 32,64,128)"
+    )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight_decay", type=float, default=0.0)
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--dropout", type=float, default=0.0)
-    parser.add_argument("--max_epochs", type=int, default=100)
+    parser.add_argument(
+        "--max_epochs", type=str, default="100", help="Max epochs (sweep: 50,100,200)"
+    )
 
-    # GCNN-specific params
+    # GCNN-specific params (sweepable - accept strings)
     parser.add_argument(
         "--channels",
-        type=int,
-        default=8,
-        help="GCNN: in_channels and hidden_channels (same value)",
+        type=str,
+        default="8",
+        help="GCNN: in_channels and hidden_channels (sweep: 4,8,16)",
     )
     parser.add_argument(
-        "--n_layers", type=int, default=2, help="GCNN: number of GraphConv layers"
+        "--n_layers",
+        type=str,
+        default="2",
+        help="GCNN: number of GraphConv layers (sweep: 1,2,3)",
     )
     parser.add_argument(
-        "--fc_hidden_dim", type=int, default=256, help="GCNN: FC trunk hidden dimension"
+        "--fc_hidden_dim",
+        type=str,
+        default="256",
+        help="GCNN: FC trunk hidden dimension (sweep: 128,256,512)",
     )
     parser.add_argument(
-        "--n_fc_layers", type=int, default=1, help="GCNN: number of FC layers"
+        "--n_fc_layers",
+        type=str,
+        default="1",
+        help="GCNN: number of FC layers (sweep: 1,2)",
     )
 
     # GCNN two-phase params
     parser.add_argument(
         "--two-phase", action="store_true", help="GCNN: Enable two-phase training"
+    )
+    parser.add_argument(
+        "--phase2-only",
+        action="store_true",
+        help="GCNN: Run only Phase 2 with warm start checkpoint",
+    )
+    parser.add_argument(
+        "--warm_start_ckpt",
+        type=str,
+        default="",
+        help="GCNN: Path to Phase 1 checkpoint for Phase 2 warm start",
     )
     parser.add_argument(
         "--phase1_epochs",
@@ -975,17 +1772,23 @@ Examples:
     )
     parser.add_argument(
         "--kappa",
-        type=float,
-        default=0.1,
-        help="GCNN: Physics loss weight (0.0 for phase 1, custom for phase 2)",
+        type=str,
+        default="0.1",
+        help="GCNN: Physics loss weight (sweep: 0.1,0.5,1.0)",
     )
 
-    # DNN-specific params
+    # DNN-specific params (sweepable - accept strings)
     parser.add_argument(
-        "--hidden_dim", type=int, default=128, help="DNN: hidden layer dimension"
+        "--hidden_dim",
+        type=str,
+        default="128",
+        help="DNN: hidden layer dimension (sweep: 64,128,256)",
     )
     parser.add_argument(
-        "--num_layers", type=int, default=3, help="DNN: number of hidden layers"
+        "--num_layers",
+        type=str,
+        default="3",
+        help="DNN: number of hidden layers (sweep: 2,3,4)",
     )
 
     # Dry run option
@@ -1001,50 +1804,250 @@ Examples:
 # =============================================================================
 # Main Entry Point
 # =============================================================================
-def main():
-    args = parse_args()
+def check_sweep_mode(args) -> bool:
+    """Check if any sweepable parameter contains multiple values."""
+    sweepable = [
+        args.channels,
+        args.n_layers,
+        args.fc_hidden_dim,
+        args.n_fc_layers,
+        args.batch_size,
+        args.max_epochs,
+        args.kappa,
+        args.hidden_dim,
+        args.num_layers,
+    ]
+    return any(is_sweep_value(str(v)) for v in sweepable)
 
-    if args.model == "gcnn":
+
+def run_gcnn_sweep(args) -> None:
+    """Run GCNN experiments with sweep over parameter combinations."""
+    # Parse sweep parameters
+    params_dict = {
+        "channels": parse_sweep_param(args.channels, int),
+        "n_layers": parse_sweep_param(args.n_layers, int),
+        "fc_hidden_dim": parse_sweep_param(args.fc_hidden_dim, int),
+        "n_fc_layers": parse_sweep_param(args.n_fc_layers, int),
+        "batch_size": parse_sweep_param(args.batch_size, int),
+        "max_epochs": parse_sweep_param(args.max_epochs, int),
+        "kappa": parse_sweep_param(args.kappa, float),
+    }
+
+    combinations = expand_combinations(params_dict)
+    n_runs = len(combinations)
+
+    print("\n" + "=" * 70)
+    print(f"🔄 SWEEP MODE: {n_runs} experiments")
+    print("=" * 70)
+    for i, combo in enumerate(combinations, 1):
+        print(f"  [{i}] {combo}")
+    print("=" * 70)
+
+    if args.dry_run:
+        print("\n[DRY RUN] Commands that would be executed:")
+        for i, combo in enumerate(combinations, 1):
+            cfg = GCNNConfig(
+                dataset=args.dataset,
+                channels=combo["channels"],
+                n_layers=combo["n_layers"],
+                fc_hidden_dim=combo["fc_hidden_dim"],
+                n_fc_layers=combo["n_fc_layers"],
+                batch_size=combo["batch_size"],
+                lr=args.lr,
+                weight_decay=args.weight_decay,
+                patience=args.patience,
+                dropout=args.dropout,
+                max_epochs=combo["max_epochs"],
+                two_phase=args.two_phase,
+                phase1_epochs=args.phase1_epochs,
+                phase2_epochs=args.phase2_epochs,
+                kappa=combo["kappa"],
+                phase2_only=getattr(args, "phase2_only", False),
+                warm_start_ckpt=getattr(args, "warm_start_ckpt", ""),
+                gpu=args.gpu,
+            )
+            print(
+                f"\n[{i}/{n_runs}] channels={combo['channels']}, n_layers={combo['n_layers']}, "
+                f"fc_hidden_dim={combo['fc_hidden_dim']}, batch_size={combo['batch_size']}, kappa={combo['kappa']}"
+            )
+            n_params = count_gcnn_params(cfg)
+            print(f"  Parameters: {n_params:,}")
+        return
+
+    # Confirm
+    response = input(f"\nRun {n_runs} experiments? [Y/n]: ").strip().lower()
+    if response not in ("", "y", "yes"):
+        print("Aborted.")
+        return
+
+    # Run each combination
+    for i, combo in enumerate(combinations, 1):
+        print("\n" + "=" * 70)
+        print(f"🔄 {format_sweep_progress(i, n_runs, combo)}")
+        print("=" * 70)
+
         cfg = GCNNConfig(
             dataset=args.dataset,
-            channels=args.channels,
-            n_layers=args.n_layers,
-            fc_hidden_dim=args.fc_hidden_dim,
-            n_fc_layers=args.n_fc_layers,
-            batch_size=args.batch_size,
+            channels=combo["channels"],
+            n_layers=combo["n_layers"],
+            fc_hidden_dim=combo["fc_hidden_dim"],
+            n_fc_layers=combo["n_fc_layers"],
+            batch_size=combo["batch_size"],
             lr=args.lr,
             weight_decay=args.weight_decay,
             patience=args.patience,
             dropout=args.dropout,
-            max_epochs=args.max_epochs,
+            max_epochs=combo["max_epochs"],
             two_phase=args.two_phase,
             phase1_epochs=args.phase1_epochs,
             phase2_epochs=args.phase2_epochs,
-            kappa=args.kappa,
+            kappa=combo["kappa"],
+            phase2_only=getattr(args, "phase2_only", False),
+            warm_start_ckpt=getattr(args, "warm_start_ckpt", ""),
             gpu=args.gpu,
         )
-        if args.dry_run:
-            dry_run_gcnn(cfg)
-        else:
-            run_gcnn_experiment(cfg)
 
-    elif args.model == "dnn":
+        # Run without confirmation prompt (already confirmed above)
+        run_gcnn_experiment_no_confirm(cfg)
+
+    print("\n" + "=" * 70)
+    print(f"✅ SWEEP COMPLETE: {n_runs} experiments logged")
+    print("=" * 70)
+
+
+def run_dnn_sweep(args) -> None:
+    """Run DNN experiments with sweep over parameter combinations."""
+    # Parse sweep parameters
+    params_dict = {
+        "hidden_dim": parse_sweep_param(args.hidden_dim, int),
+        "num_layers": parse_sweep_param(args.num_layers, int),
+        "batch_size": parse_sweep_param(args.batch_size, int),
+        "max_epochs": parse_sweep_param(args.max_epochs, int),
+    }
+
+    combinations = expand_combinations(params_dict)
+    n_runs = len(combinations)
+
+    print("\n" + "=" * 70)
+    print(f"🔄 SWEEP MODE: {n_runs} experiments")
+    print("=" * 70)
+    for i, combo in enumerate(combinations, 1):
+        print(f"  [{i}] {combo}")
+    print("=" * 70)
+
+    if args.dry_run:
+        print("\n[DRY RUN] Commands that would be executed:")
+        for i, combo in enumerate(combinations, 1):
+            cfg = DNNConfig(
+                dataset=args.dataset,
+                hidden_dim=combo["hidden_dim"],
+                num_layers=combo["num_layers"],
+                batch_size=combo["batch_size"],
+                lr=args.lr,
+                weight_decay=args.weight_decay,
+                patience=args.patience,
+                dropout=args.dropout,
+                max_epochs=combo["max_epochs"],
+                gpu=args.gpu,
+            )
+            print(
+                f"\n[{i}/{n_runs}] hidden_dim={combo['hidden_dim']}, "
+                f"num_layers={combo['num_layers']}, batch_size={combo['batch_size']}"
+            )
+            n_params = count_dnn_params(cfg)
+            print(f"  Parameters: {n_params:,}")
+        return
+
+    # Confirm
+    response = input(f"\nRun {n_runs} experiments? [Y/n]: ").strip().lower()
+    if response not in ("", "y", "yes"):
+        print("Aborted.")
+        return
+
+    # Run each combination
+    for i, combo in enumerate(combinations, 1):
+        print("\n" + "=" * 70)
+        print(f"🔄 {format_sweep_progress(i, n_runs, combo)}")
+        print("=" * 70)
+
         cfg = DNNConfig(
             dataset=args.dataset,
-            hidden_dim=args.hidden_dim,
-            num_layers=args.num_layers,
-            batch_size=args.batch_size,
+            hidden_dim=combo["hidden_dim"],
+            num_layers=combo["num_layers"],
+            batch_size=combo["batch_size"],
             lr=args.lr,
             weight_decay=args.weight_decay,
             patience=args.patience,
             dropout=args.dropout,
-            max_epochs=args.max_epochs,
+            max_epochs=combo["max_epochs"],
             gpu=args.gpu,
         )
-        if args.dry_run:
-            dry_run_dnn(cfg)
+
+        # Run without confirmation prompt (already confirmed above)
+        run_dnn_experiment_no_confirm(cfg)
+
+    print("\n" + "=" * 70)
+    print(f"✅ SWEEP COMPLETE: {n_runs} experiments logged")
+    print("=" * 70)
+
+
+def main():
+    args = parse_args()
+
+    # Check for sweep mode
+    is_sweep = check_sweep_mode(args)
+
+    if args.model == "gcnn":
+        if is_sweep:
+            run_gcnn_sweep(args)
         else:
-            run_dnn_experiment(cfg)
+            # Single run - parse single values
+            cfg = GCNNConfig(
+                dataset=args.dataset,
+                channels=int(args.channels),
+                n_layers=int(args.n_layers),
+                fc_hidden_dim=int(args.fc_hidden_dim),
+                n_fc_layers=int(args.n_fc_layers),
+                batch_size=int(args.batch_size),
+                lr=args.lr,
+                weight_decay=args.weight_decay,
+                patience=args.patience,
+                dropout=args.dropout,
+                max_epochs=int(args.max_epochs),
+                two_phase=args.two_phase,
+                phase1_epochs=args.phase1_epochs,
+                phase2_epochs=args.phase2_epochs,
+                kappa=float(args.kappa),
+                phase2_only=getattr(args, "phase2_only", False),
+                warm_start_ckpt=getattr(args, "warm_start_ckpt", ""),
+                gpu=args.gpu,
+            )
+            if args.dry_run:
+                dry_run_gcnn(cfg)
+            else:
+                run_gcnn_experiment(cfg)
+
+    elif args.model == "dnn":
+        if is_sweep:
+            run_dnn_sweep(args)
+        else:
+            # Single run - parse single values
+            cfg = DNNConfig(
+                dataset=args.dataset,
+                hidden_dim=int(args.hidden_dim),
+                num_layers=int(args.num_layers),
+                batch_size=int(args.batch_size),
+                lr=args.lr,
+                weight_decay=args.weight_decay,
+                patience=args.patience,
+                dropout=args.dropout,
+                max_epochs=int(args.max_epochs),
+                gpu=args.gpu,
+            )
+            if args.dry_run:
+                dry_run_dnn(cfg)
+            else:
+                run_dnn_experiment(cfg)
 
 
 def dry_run_gcnn(cfg: GCNNConfig) -> None:
@@ -1070,7 +2073,18 @@ def dry_run_gcnn(cfg: GCNNConfig) -> None:
         f"weight_decay={cfg.weight_decay}, patience={cfg.patience}, dropout={cfg.dropout}"
     )
 
-    if cfg.two_phase:
+    if cfg.phase2_only:
+        print(
+            f"  Phase 2 Only: max_epochs={cfg.max_epochs}, kappa={cfg.kappa} (warm-start)"
+        )
+        print(f"  Warm start: {cfg.warm_start_ckpt}")
+        cmd = generate_gcnn_train_command(
+            cfg, cfg.max_epochs, kappa=cfg.kappa, warm_start_ckpt=cfg.warm_start_ckpt
+        )
+        print()
+        print("Command:")
+        print(f"  {cmd}")
+    elif cfg.two_phase:
         print(f"  Phase 1: max_epochs={cfg.phase1_epochs}, kappa=0.0")
         print(
             f"  Phase 2: max_epochs={cfg.phase2_epochs}, kappa={cfg.kappa} (warm-start)"

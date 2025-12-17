@@ -33,7 +33,11 @@ import hydra
 import pytorch_lightning as pl
 import torch
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, TQDMProgressBar
+
+# Enable Tensor Cores on supported GPUs (RTX 20xx, 30xx, 40xx, etc.)
+# 'medium' uses TF32 for ~3x speedup with minimal precision loss
+torch.set_float32_matmul_precision("medium")
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -43,6 +47,7 @@ from deep_opf.models import GCNN, AdmittanceDNN
 from deep_opf.task import OPFTask
 from deep_opf.utils.callbacks import LiteProgressBar
 from deep_opf.utils.logger import log_experiment_to_csv
+from deep_opf.utils.plot_loss import plot_loss_curves_from_log_dir
 
 
 def instantiate_model(cfg: DictConfig, n_bus: int, n_gen: int) -> pl.LightningModule:
@@ -135,6 +140,7 @@ def instantiate_datamodule(cfg: DictConfig) -> OPFDataModule:
         feature_type=feature_type,
         feature_params=feature_params,
         pin_memory=cfg.data.get("pin_memory", True),
+        persistent_workers=cfg.train.get("persistent_workers", False),
     )
 
     print(
@@ -196,12 +202,15 @@ def setup_callbacks(cfg: DictConfig, ssh_mode: bool = False) -> list:
     callbacks = []
 
     # Model checkpoint
+    # Note: auto_insert_metric_name=False prevents 'epoch=' and 'val_loss=' prefixes
+    # This avoids Hydra parsing issues with '=' in filenames
     checkpoint_callback = ModelCheckpoint(
         monitor=cfg.checkpoint.monitor,
         mode=cfg.checkpoint.mode,
         save_top_k=cfg.checkpoint.save_top_k,
         save_last=cfg.checkpoint.save_last,
-        filename="{epoch}-{val_loss:.4f}",
+        filename="epoch{epoch:02d}-val{val_loss:.4f}",
+        auto_insert_metric_name=False,
         verbose=True,
     )
     callbacks.append(checkpoint_callback)
@@ -225,10 +234,20 @@ def setup_callbacks(cfg: DictConfig, ssh_mode: bool = False) -> list:
             f"patience={patience}"
         )
 
-    # SSH mode: Add lightweight progress bar
+    # Progress bar configuration
     if ssh_mode:
+        # SSH mode: Add lightweight progress bar (epoch-level only)
         callbacks.append(LiteProgressBar())
         print("Added LiteProgressBar (SSH mode)")
+    else:
+        # Standard mode: TQDM with reduced refresh rate (update every N batches)
+        # refresh_rate=0 means update only at epoch end
+        refresh_rate = cfg.train.get("progress_refresh_rate", 0)
+        callbacks.append(TQDMProgressBar(refresh_rate=refresh_rate))
+        if refresh_rate == 0:
+            print("Added TQDMProgressBar: epoch-level updates only (refresh_rate=0)")
+        else:
+            print(f"Added TQDMProgressBar: refresh_rate={refresh_rate}")
 
     return callbacks
 
@@ -318,7 +337,7 @@ def main(cfg: DictConfig) -> None:
         callbacks=callbacks,
         log_every_n_steps=cfg.logging.log_every_n_steps,
         deterministic=True,
-        enable_progress_bar=not ssh_mode,  # Disable TQDM in SSH mode
+        enable_progress_bar=True,  # Required when using TQDMProgressBar callback
     )
 
     print(
@@ -350,6 +369,10 @@ def main(cfg: DictConfig) -> None:
     if trainer.checkpoint_callback:
         print(f"Best model: {trainer.checkpoint_callback.best_model_path}")
         print(f"Best score: {best_score}")
+
+    # Generate loss curves plot
+    if trainer.log_dir:
+        plot_loss_curves_from_log_dir(trainer.log_dir)
 
     # Log experiment to CSV
     if best_score is not None:

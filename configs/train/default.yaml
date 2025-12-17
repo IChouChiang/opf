@@ -13,10 +13,12 @@ accelerator: auto
 devices: 1
 
 # Additional trainer settings
-num_workers: 0
+num_workers: 4  # Parallel data loading (4 is usually optimal)
+persistent_workers: true  # Keep workers alive between epochs (faster)
 precision: 32
 gradient_clip_val: null
 accumulate_grad_batches: 1
+progress_refresh_rate: 0  # 0 = update only at epoch end, N = update every N batches
 
 # Warm start: Path to checkpoint for two-stage training
 # If provided, weights are loaded before training (optimizer NOT loaded)

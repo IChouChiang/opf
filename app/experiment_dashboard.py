@@ -85,25 +85,81 @@ def count_dnn_params(
 
 
 # =============================================================================
+# Sweep Utilities
+# =============================================================================
+def parse_sweep_value(value_str: str, param_type: type = int) -> tuple[bool, list, str]:
+    """
+    Parse a potentially comma-separated parameter string.
+
+    Returns:
+        (is_valid, values_list, error_message)
+    """
+    import re
+
+    parts = re.split(r"\s*,\s*", value_str.strip())
+    values = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            values.append(param_type(part))
+        except ValueError:
+            return False, [], f"Invalid value: '{part}'"
+
+    if not values:
+        return False, [], "No values provided"
+
+    return True, values, ""
+
+
+def is_sweep_value(value_str: str) -> bool:
+    """Check if value contains multiple comma-separated values."""
+    return "," in str(value_str)
+
+
+def count_combinations(*value_strings: str) -> int:
+    """Count total combinations from multiple sweep value strings."""
+    import re
+
+    total = 1
+    for vs in value_strings:
+        parts = [p.strip() for p in re.split(r"\s*,\s*", str(vs).strip()) if p.strip()]
+        total *= max(1, len(parts))
+    return total
+
+
+# =============================================================================
 # Command Generation Functions
 # =============================================================================
+def format_command(cmd_parts: list[str], shell: str = "bash") -> str:
+    """Format command parts with appropriate line continuation for shell type."""
+    if shell == "powershell":
+        return " `\n    ".join(cmd_parts)
+    else:  # bash
+        return " \\\n    ".join(cmd_parts)
+
+
 def generate_gcnn_command(
     dataset: str,
-    channels: int,
-    n_layers: int,
-    fc_hidden_dim: int,
-    n_fc_layers: int,
-    batch_size: int,
+    channels: str,  # Now string for sweep support
+    n_layers: str,
+    fc_hidden_dim: str,
+    n_fc_layers: str,
+    batch_size: str,
     lr: float,
     weight_decay: float,
     patience: int,
     dropout: float,
-    max_epochs: int,
+    max_epochs: str,  # Now string for sweep support
     two_phase: bool,
     phase1_epochs: int,
     phase2_epochs: int,
-    kappa: float,
+    kappa: str,  # Now string for sweep support
     gpu: int,
+    shell: str = "bash",
+    phase2_only: bool = False,
+    warm_start_ckpt: str = "",
 ) -> str:
     """Generate CLI command for GCNN experiment."""
     cmd_parts = [
@@ -121,7 +177,17 @@ def generate_gcnn_command(
         f"--gpu {gpu}",
     ]
 
-    if two_phase:
+    if phase2_only and warm_start_ckpt:
+        # Phase 2 only mode: single phase with warm start
+        cmd_parts.extend(
+            [
+                "--phase2-only",
+                f'--warm_start_ckpt "{warm_start_ckpt}"',
+                f"--max_epochs {max_epochs}",
+                f"--kappa {kappa}",
+            ]
+        )
+    elif two_phase:
         cmd_parts.extend(
             [
                 "--two-phase",
@@ -134,20 +200,21 @@ def generate_gcnn_command(
         cmd_parts.append(f"--max_epochs {max_epochs}")
         cmd_parts.append(f"--kappa {kappa}")
 
-    return " \\\n    ".join(cmd_parts)
+    return format_command(cmd_parts, shell)
 
 
 def generate_dnn_command(
     dataset: str,
-    hidden_dim: int,
-    num_layers: int,
-    batch_size: int,
+    hidden_dim: str,  # Now string for sweep support
+    num_layers: str,  # Now string for sweep support
+    batch_size: str,  # Now string for sweep support
     lr: float,
     weight_decay: float,
     patience: int,
     dropout: float,
-    max_epochs: int,
+    max_epochs: str,  # Now string for sweep support
     gpu: int,
+    shell: str = "bash",
 ) -> str:
     """Generate CLI command for DNN experiment."""
     cmd_parts = [
@@ -164,7 +231,7 @@ def generate_dnn_command(
         f"--gpu {gpu}",
     ]
 
-    return " \\\n    ".join(cmd_parts)
+    return format_command(cmd_parts, shell)
 
 
 # =============================================================================
@@ -226,72 +293,75 @@ def render_settings_tab():
 
     # Architecture Parameters
     st.subheader("📐 Architecture")
+    st.caption("💡 Use commas for sweep mode: `8,16,32`")
 
     if model_type == "GCNN":
         col1, col2 = st.columns(2)
         with col1:
-            channels = st.number_input(
+            channels = st.text_input(
                 "Channels (in_channels = hidden_channels)",
-                min_value=2,
-                max_value=64,
-                value=8,
-                step=1,
-                help="Number of input/hidden channels for GraphConv layers",
+                value="8",
+                help="Sweep: 4,8,16",
             )
-            n_layers = st.number_input(
+            n_layers = st.text_input(
                 "GraphConv Layers",
-                min_value=1,
-                max_value=8,
-                value=2,
-                step=1,
-                help="Number of GraphConv layers",
+                value="2",
+                help="Sweep: 1,2,3",
             )
         with col2:
-            fc_hidden_dim = st.number_input(
+            fc_hidden_dim = st.text_input(
                 "FC Hidden Dim",
-                min_value=32,
-                max_value=2048,
-                value=256,
-                step=32,
-                help="Hidden dimension for fully-connected layers",
+                value="256",
+                help="Sweep: 128,256,512",
             )
-            n_fc_layers = st.number_input(
+            n_fc_layers = st.text_input(
                 "FC Layers",
-                min_value=1,
-                max_value=5,
-                value=1,
-                step=1,
-                help="Number of FC layers before output heads",
+                value="1",
+                help="Sweep: 1,2",
             )
 
-        # Calculate params
-        n_params = count_gcnn_params(
-            n_bus, n_gen, channels, n_layers, fc_hidden_dim, n_fc_layers
-        )
+        # Validate and calculate params (use first value for display)
+        valid_ch, ch_vals, ch_err = parse_sweep_value(channels, int)
+        valid_nl, nl_vals, nl_err = parse_sweep_value(n_layers, int)
+        valid_fc, fc_vals, fc_err = parse_sweep_value(fc_hidden_dim, int)
+        valid_nfc, nfc_vals, nfc_err = parse_sweep_value(n_fc_layers, int)
+
+        if valid_ch and valid_nl and valid_fc and valid_nfc:
+            n_params = count_gcnn_params(
+                n_bus, n_gen, ch_vals[0], nl_vals[0], fc_vals[0], nfc_vals[0]
+            )
+        else:
+            n_params = 0
+            errors = [e for e in [ch_err, nl_err, fc_err, nfc_err] if e]
+            if errors:
+                st.error(f"Invalid input: {'; '.join(errors)}")
 
     else:  # DNN
         col1, col2 = st.columns(2)
         with col1:
-            hidden_dim = st.number_input(
+            hidden_dim = st.text_input(
                 "Hidden Dim",
-                min_value=32,
-                max_value=2048,
-                value=128,
-                step=32,
-                help="Hidden layer dimension",
+                value="128",
+                help="Sweep: 64,128,256",
             )
         with col2:
-            num_layers = st.number_input(
+            num_layers = st.text_input(
                 "Number of Layers",
-                min_value=1,
-                max_value=10,
-                value=3,
-                step=1,
-                help="Number of hidden layers",
+                value="3",
+                help="Sweep: 2,3,4",
             )
 
-        # Calculate params
-        n_params = count_dnn_params(n_bus, n_gen, hidden_dim, num_layers)
+        # Validate and calculate params
+        valid_hd, hd_vals, hd_err = parse_sweep_value(hidden_dim, int)
+        valid_numl, numl_vals, numl_err = parse_sweep_value(num_layers, int)
+
+        if valid_hd and valid_numl:
+            n_params = count_dnn_params(n_bus, n_gen, hd_vals[0], numl_vals[0])
+        else:
+            n_params = 0
+            errors = [e for e in [hd_err, numl_err] if e]
+            if errors:
+                st.error(f"Invalid input: {'; '.join(errors)}")
 
     st.divider()
 
@@ -300,17 +370,15 @@ def render_settings_tab():
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        batch_size = st.number_input(
+        batch_size = st.text_input(
             "Batch Size",
-            min_value=8,
-            max_value=512,
-            value=32 if model_type == "GCNN" else 64,
-            step=8,
+            value="32" if model_type == "GCNN" else "64",
+            help="Sweep: 32,64,128",
         )
         patience = st.number_input(
             "Patience",
             min_value=5,
-            max_value=100,
+            max_value=2000,
             value=20,
             step=5,
             help="Early stopping patience",
@@ -341,19 +409,19 @@ def render_settings_tab():
             step=0.001,
             format="%.4f",
         )
-        max_epochs = st.number_input(
+        max_epochs = st.text_input(
             "Max Epochs",
-            min_value=10,
-            max_value=1000,
-            value=100,
-            step=10,
+            value="100",
+            help="Sweep: 50,100,200",
         )
 
     # GCNN-specific: Two-phase training
     two_phase = False
     phase1_epochs = 50
     phase2_epochs = 100
-    kappa = 0.1
+    kappa = "0.1"
+    phase2_only = False
+    warm_start_ckpt = ""
 
     if model_type == "GCNN":
         st.divider()
@@ -365,33 +433,45 @@ def render_settings_tab():
             help="Phase 1: Supervised only (kappa=0). Phase 2: Add physics loss.",
         )
 
+        # Phase 2 Only mode - resume from existing checkpoint
+        phase2_only = st.checkbox(
+            "Phase 2 Only (Resume from checkpoint)",
+            value=False,
+            help="Run only Phase 2 with an existing Phase 1 checkpoint",
+        )
+
+        warm_start_ckpt = ""
+        if phase2_only:
+            warm_start_ckpt = st.text_input(
+                "Phase 1 Checkpoint Path",
+                value="",
+                placeholder="lightning_logs/version_X/checkpoints/epochXX-val_lossX.XXXX.ckpt",
+                help="Path to Phase 1 checkpoint for warm start",
+            )
+            if not warm_start_ckpt:
+                st.warning("⚠️ Please provide a checkpoint path for Phase 2 training")
+
         col1, col2, col3 = st.columns(3)
-        if two_phase:
+        if two_phase and not phase2_only:
             with col1:
                 phase1_epochs = st.number_input(
                     "Phase 1 Epochs",
-                    min_value=10,
-                    max_value=500,
+                    min_value=0,
                     value=50,
                     step=10,
                 )
             with col2:
                 phase2_epochs = st.number_input(
                     "Phase 2 Epochs",
-                    min_value=10,
-                    max_value=500,
+                    min_value=0,
                     value=100,
                     step=10,
                 )
         with col3 if two_phase else col1:
-            kappa = st.number_input(
+            kappa = st.text_input(
                 "Kappa (Physics Loss Weight)",
-                min_value=0.0,
-                max_value=10.0,
-                value=0.1,
-                step=0.01,
-                format="%.3f",
-                help="Weight for physics loss term",
+                value="0.1",
+                help="Sweep: 0.1,0.5,1.0",
             )
 
     st.divider()
@@ -420,6 +500,53 @@ def render_settings_tab():
     # Command Generation
     st.subheader("📝 Generated Command")
 
+    # Detect sweep mode
+    if model_type == "GCNN":
+        sweep_params = {
+            "channels": channels,
+            "n_layers": n_layers,
+            "fc_hidden_dim": fc_hidden_dim,
+            "n_fc_layers": n_fc_layers,
+            "batch_size": batch_size,
+            "max_epochs": max_epochs,
+            "kappa": kappa,
+        }
+    else:
+        sweep_params = {
+            "hidden_dim": hidden_dim,
+            "num_layers": num_layers,
+            "batch_size": batch_size,
+            "max_epochs": max_epochs,
+        }
+
+    # Count sweep combinations
+    sweep_counts = {}
+    for name, val in sweep_params.items():
+        if is_sweep_value(val):
+            _, values, _ = parse_sweep_value(val)
+            if values:
+                sweep_counts[name] = len(values)
+
+    total_runs = 1
+    for count in sweep_counts.values():
+        total_runs *= count
+
+    # Display sweep indicator
+    if total_runs > 1:
+        sweep_details = " × ".join(
+            f"{name}({count})" for name, count in sweep_counts.items()
+        )
+        st.warning(f"⚠️ **Sweep Mode**: {sweep_details} = **{total_runs} experiments**")
+
+    # Shell format selector
+    shell_format = st.radio(
+        "Shell Format",
+        ["PowerShell", "Bash"],
+        horizontal=True,
+        help="Select your shell for correct line continuation syntax",
+    )
+    shell = "powershell" if shell_format == "PowerShell" else "bash"
+
     if model_type == "GCNN":
         command = generate_gcnn_command(
             dataset=dataset,
@@ -438,6 +565,9 @@ def render_settings_tab():
             phase2_epochs=phase2_epochs,
             kappa=kappa,
             gpu=gpu,
+            shell=shell,
+            phase2_only=phase2_only,
+            warm_start_ckpt=warm_start_ckpt,
         )
     else:
         command = generate_dnn_command(
@@ -451,12 +581,18 @@ def render_settings_tab():
             dropout=dropout,
             max_epochs=max_epochs,
             gpu=gpu,
+            shell=shell,
         )
 
-    st.code(command, language="bash")
+    st.code(command, language="powershell" if shell == "powershell" else "bash")
 
     # Copy button hint
-    st.caption("💡 Click the copy icon in the code block above to copy the command")
+    if total_runs > 1:
+        st.caption(
+            "💡 Copy the command above. The script will automatically run all sweep combinations."
+        )
+    else:
+        st.caption("💡 Click the copy icon in the code block above to copy the command")
 
 
 # =============================================================================
@@ -509,6 +645,13 @@ def render_results_tab():
             "dataset",
             "params",
             "arch",
+            "batch_size",
+            "lr",
+            "patience",
+            "dropout",
+            "max_epochs",
+            "kappa",
+            "phase",
             "R2_PG_seen",
             "R2_VG_seen",
             "Pacc_PG_seen",

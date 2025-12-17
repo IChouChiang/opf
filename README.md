@@ -19,9 +19,11 @@ Educational assignments progressing from DC Optimal Power Flow (Week 2) through 
 - **Streamlit Dashboard:** Web UI for experiment configuration and results viewing
   - Settings tab: Model selection (GCNN/DNN), architecture params, training hyperparams
   - Results tab: CSV-based experiment history with metrics (R², Pacc, Physics)
+  - **Sweep Mode:** Enter comma-separated values (e.g., `8,16,32`) for hyperparameter sweeps
   - Launch: `conda activate opf311 && python -m streamlit run app/experiment_dashboard.py`
 - **CLI Runner:** `scripts/run_experiment.py` - Unified command generator for automated experiments
   - Supports GCNN (with two-phase physics training) and DNN models
+  - **Sweep Mode:** Use comma-separated values to run multiple experiments automatically
   - Auto parameter counting, checkpoint discovery, eval on seen+unseen data
   - Dry-run mode: `python scripts/run_experiment.py gcnn case39 --dry-run`
 - **Experiment Logging:** CSV files at `outputs/gcnn_experiments.csv` and `outputs/dnn_experiments.csv`
@@ -153,6 +155,25 @@ python scripts/run_experiment.py dnn case39 --hidden_dim 128 --num_layers 3
 # Dry-run to preview command
 python scripts/run_experiment.py gcnn case39 --dry-run
 ```
+
+### Hyperparameter Sweep Mode
+Run multiple experiments with comma-separated values:
+```bash
+# Sweep over channel sizes and batch sizes (4 experiments: 2×2)
+python scripts/run_experiment.py gcnn case39 --channels 8,16 --batch_size 32,64
+
+# Sweep over hidden dim and layers (4 experiments: 2×2)
+python scripts/run_experiment.py dnn case39 --hidden_dim 64,128 --num_layers 2,3
+
+# Preview sweep combinations with dry-run
+python scripts/run_experiment.py gcnn case39 --channels 8,16,32 --batch_size 32,64 --dry-run
+```
+
+Sweepable parameters:
+- **GCNN:** `channels`, `n_layers`, `fc_hidden_dim`, `n_fc_layers`, `batch_size`, `max_epochs`, `kappa`
+- **DNN:** `hidden_dim`, `num_layers`, `batch_size`, `max_epochs`
+
+Each combination runs the full train→eval→CSV logging pipeline.
 
 ### Week 4 AC-OPF
 Run the AC-OPF test harnesses:

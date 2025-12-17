@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALL EXPERIMENTS</title>
+    
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+    
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px 40px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #2e7d32, #4CAF50);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header h1 { margin: 0 0 10px 0; font-size: 1.8em; }
+        .header p { margin: 5px 0; opacity: 0.9; }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        table.dataTable { width: 100% !important; border-collapse: collapse; }
+        table.dataTable thead th {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 8px;
+            border-bottom: 2px solid #2e7d32;
+            white-space: nowrap;
+        }
+        table.dataTable tbody td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+        }
+        table.dataTable tbody tr:hover { background-color: #e8f5e9 !important; }
+        table.dataTable tfoot th { padding: 8px 4px; }
+        .best-high {
+            background-color: #c8e6c9 !important;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+        .best-low {
+            background-color: #e3f2fd !important;
+            font-weight: bold;
+            color: #1565c0;
+        }
+        .column-filter {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        .column-filter:focus { outline: none; border-color: #4CAF50; }
+        .stats-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            min-width: 150px;
+        }
+        .stat-card .label { font-size: 0.85em; color: #666; margin-bottom: 5px; }
+        .stat-card .value { font-size: 1.5em; font-weight: bold; color: #2e7d32; }
+        .dt-buttons { margin-bottom: 15px; }
+        .dt-button {
+            background: #4CAF50 !important;
+            border: none !important;
+            color: white !important;
+            padding: 8px 16px !important;
+            border-radius: 4px !important;
+            margin-right: 5px !important;
+        }
+        .dt-button:hover { background: #2e7d32 !important; }
+        .dataTables_filter input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+        .dataTables_filter input:focus { outline: none; border-color: #4CAF50; }
+        .footer {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .legend { display: flex; gap: 20px; margin-top: 10px; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-box { width: 20px; height: 20px; border-radius: 4px; }
+        .legend-box.high { background-color: #c8e6c9; }
+        .legend-box.low { background-color: #e3f2fd; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔬 ALL EXPERIMENTS</h1>
+        <p>Generated: 2025-12-16 00:02:22</p>
+        <p>Total experiments: 31</p>
+    </div>
+    
+    <div class="stats-row" id="statsRow"></div>
+    
+    <div class="container">
+        <table id="resultsTable" class="display nowrap" style="width:100%">
+            <thead>
+                <tr><th>timestamp</th><th>phase</th><th>model</th><th>dataset</th><th>n_bus</th><th>n_gen</th><th>params</th><th>hidden_dim</th><th>channels</th><th>in_channels</th><th>layers</th><th>lr</th><th>kappa</th><th>weight_decay</th><th>batch_size</th><th>max_epochs</th><th>warm_start</th><th>best_loss</th><th>duration</th><th>duration_sec</th><th>R2_PG</th><th>R2_VG</th><th>Pacc_PG</th><th>Pacc_VG</th><th>RMSE_PG</th><th>RMSE_VG</th><th>MAE_PG</th><th>MAE_VG</th><th>Physics_Violation_MW</th><th>log_dir</th><th>n_samples</th></tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+                <tr><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th><th><input type="text" class="column-filter" placeholder="Filter..." /></th></tr>
+            </tfoot>
+        </table>
+    </div>
+    
+    <div class="footer">
+        <strong>Metrics Guide:</strong>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box high"></div>
+                <span>R², Pacc: Higher is better</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box low"></div>
+                <span>RMSE, Physics Violation: Lower is better</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    
+    <script>
+        const tableData = [["12-15 17:22", "Training", "dnn", "case6ww", 6.0, 3.0, "11K", 64.0, 0.0, 0.0, 2.0, 0.001, 0.1, 0.0, 24.0, 2.0, "No", 0.1721, "4.9s", 4.9, "", "", "", "", "", "", "", "", "", "", ""], ["12-15 17:25", "Training", "dnn", "case6ww", 6.0, 3.0, "11K", 64.0, 0.0, 0.0, 2.0, 0.001, 0.1, 0.0, 24.0, 2.0, "No", 0.1721, "4.8s", 4.8, "", "", "", "", "", "", "", "", "", "", ""], ["12-15 17:32", "Training", "dnn", "case6ww", 6.0, 3.0, "11K", 64.0, 0.0, 0.0, 2.0, 0.001, 0.1, 0.0, 24.0, 2.0, "No", 0.1721, "4.8s", 4.8, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 17:37", "Evaluation", "dnn", "case6ww", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.99, "", "98.50%", "", "", "", "", "", "", "", ""], ["12-15 17:38", "Evaluation", "dnn", "case6ww", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.99, "", "98.50%", "", "", "", "", "", "", "", ""], ["12-15 17:39", "Evaluation", "dnn", "case6ww", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.99, "", "98.50%", "", "", "", "", "", "", "", ""], ["12-15 17:39", "Training", "dnn", "case6ww", 6.0, 3.0, "11K", 64.0, 0.0, 0.0, 2.0, 0.001, 0.1, 0.0, 24.0, 1.0, "No", 0.5743, "2.5s", 2.5, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 17:55", "Evaluation", "dnn", "case6ww", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.99, "", "98.50%", "", "", "", "", "", "", "", ""], ["12-15 17:55", "Training", "dnn", "case6ww", 6.0, 3.0, "11K", 64.0, 0.0, 0.0, 2.0, 0.001, 0.1, 0.0, 24.0, 1.0, "No", 0.5743, "2.8s", 2.8, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 18:09", "Training", "gcnn", "case39", 39.0, 10.0, "723K", 1000.0, 8.0, 10.0, 2.0, 0.001, 0.1, 0.0, 24.0, 50.0, "No", 0.1374, "4m 14s", 254.5, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 18:41", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.457, 0.4383, "7.71%", "7.88%", 0.3707, 0.0298, 0.2058, 0.0188, "159.75", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_18\\checkpoints", 1200.0], ["12-15 18:54", "Training", "gcnn", "case39", 39.0, 10.0, "723K", 1000.0, 8.0, 10.0, 2.0, 0.001, 0.0, 0.0, 24.0, 500.0, "No", 0.1167, "8m 2s", 482.8, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 18:56", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.4663, 0.5357, "8.53%", "12.16%", 0.3675, 0.0271, 0.2176, 0.0159, "319.26", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_19\\checkpoints", 1200.0], ["12-15 19:04", "Training", "gcnn", "case39", 39.0, 10.0, "2.6M", 1000.0, 32.0, 10.0, 2.0, 0.001, 0.0, 0.0, 24.0, 200.0, "No", 0.1176, "4m 57s", 297.1, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 19:16", "Training", "gcnn", "case39", 39.0, 10.0, "2.6M", 1000.0, 32.0, 10.0, 4.0, 0.001, 0.0, 0.0, 24.0, 200.0, "No", 0.0995, "12m 39s", 759.4, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 19:21", "Training", "gcnn", "case39", 39.0, 10.0, "5.1M", 1000.0, 64.0, 10.0, 2.0, 0.001, 0.0, 0.0, 24.0, 200.0, "No", 0.1118, "4m 17s", 257.1, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 19:26", "Training", "gcnn", "case39", 39.0, 10.0, "5.1M", 1000.0, 64.0, 10.0, 4.0, 0.001, 0.0, 0.0, 24.0, 200.0, "No", 0.1493, "5m 32s", 332.2, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 19:57", "Training", "gcnn", "case39", 39.0, 10.0, "2.6M", 1000.0, 32.0, 10.0, 4.0, 0.001, 0.0, 0.0, 24.0, 1000.0, "No", 0.0995, "12m 28s", 748.8, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 20:09", "Training", "gcnn", "case39", 39.0, 10.0, "2.6M", 1000.0, 32.0, 10.0, 4.0, 0.0001, 0.1, 0.0, 24.0, 200.0, "Yes", 0.0852, "8m 32s", 512.7, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 20:14", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.3787, 0.356, "10.98%", "11.94%", 0.3965, 0.0319, 0.2598, 0.0217, "151.13", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_25\\checkpoints", 1200.0], ["12-15 20:18", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.9434, 0.9829, "34.27%", "30.80%", 0.1209, 0.0052, 0.0373, 0.0031, "152.13", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_25\\checkpoints", 2000.0], ["12-15 20:26", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.9288, 0.9774, "18.16%", "22.00%", 0.1356, 0.006, 0.0526, 0.0038, "987.17", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_24\\checkpoints", 2000.0], ["12-15 20:56", "Training", "dnn", "case39", 39.0, 10.0, "3.2M", 800.0, 0.0, 0.0, 2.0, 0.001, 0.1, 0.0, 24.0, 200.0, "No", 1.2084, "4m 1s", 241.6, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 21:04", "Evaluation", "dnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.2337, 0.6585, "2.65%", "3.15%", 0.445, 0.0232, 0.2895, 0.0182, "163.98", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_26\\checkpoints", 2000.0], ["12-15 21:10", "Evaluation", "dnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.2337, 0.6585, "2.65%", "3.15%", 0.445, 0.0232, 0.2895, 0.0182, "163.98", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_26\\checkpoints", 2000.0], ["12-15 22:18", "Training", "gcnn", "case39", 39.0, 10.0, "2.6M", 1000.0, 32.0, 10.0, 4.0, 0.0, 10.0, 0.0, 24.0, 50.0, "Yes", 0.4438, "7m 4s", 424.8, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 22:21", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.8479, 0.98, "2.15%", "25.59%", 0.1983, 0.0056, 0.1365, 0.0035, "149.11", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_27\\checkpoints", 2000.0], ["12-15 22:33", "Training", "gcnn", "case39", 39.0, 10.0, "4.6M", 1000.0, 32.0, 10.0, 4.0, 0.001, 0.0, 0.0, 24.0, 1000.0, "No", 0.1662, "4m 2s", 242.6, "", "", "", "", "", "", "", "", "", "E:\\DOCUMENT\\Learn_Py\\opf", ""], ["12-15 22:35", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.8831, 0.9601, "7.69%", "15.21%", 0.1738, 0.0079, 0.0965, 0.0054, "352.86", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_28\\checkpoints", 2000.0], ["12-15 23:58", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.7627, 0.8614, "21.75%", "16.59%", 0.2451, 0.0148, 0.0948, 0.0096, "485.94", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_29\\checkpoints", 1200.0], ["12-15 23:59", "Evaluation", "gcnn", "case39", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 0.9438, 0.9852, "34.49%", "32.58%", 0.1205, 0.0048, 0.0341, 0.0028, "601.36", "E:\\DOCUMENT\\Learn_Py\\opf\\lightning_logs\\version_29\\checkpoints", 2000.0]];
+        const columns = [{"data": 0, "title": "timestamp"}, {"data": 1, "title": "phase"}, {"data": 2, "title": "model"}, {"data": 3, "title": "dataset"}, {"data": 4, "title": "n_bus"}, {"data": 5, "title": "n_gen"}, {"data": 6, "title": "params"}, {"data": 7, "title": "hidden_dim"}, {"data": 8, "title": "channels"}, {"data": 9, "title": "in_channels"}, {"data": 10, "title": "layers"}, {"data": 11, "title": "lr"}, {"data": 12, "title": "kappa"}, {"data": 13, "title": "weight_decay"}, {"data": 14, "title": "batch_size"}, {"data": 15, "title": "max_epochs"}, {"data": 16, "title": "warm_start"}, {"data": 17, "title": "best_loss"}, {"data": 18, "title": "duration"}, {"data": 19, "title": "duration_sec"}, {"data": 20, "title": "R2_PG"}, {"data": 21, "title": "R2_VG"}, {"data": 22, "title": "Pacc_PG"}, {"data": 23, "title": "Pacc_VG"}, {"data": 24, "title": "RMSE_PG"}, {"data": 25, "title": "RMSE_VG"}, {"data": 26, "title": "MAE_PG"}, {"data": 27, "title": "MAE_VG"}, {"data": 28, "title": "Physics_Violation_MW"}, {"data": 29, "title": "log_dir"}, {"data": 30, "title": "n_samples"}];
+        const colNames = ["timestamp", "phase", "model", "dataset", "n_bus", "n_gen", "params", "hidden_dim", "channels", "in_channels", "layers", "lr", "kappa", "weight_decay", "batch_size", "max_epochs", "warm_start", "best_loss", "duration", "duration_sec", "R2_PG", "R2_VG", "Pacc_PG", "Pacc_VG", "RMSE_PG", "RMSE_VG", "MAE_PG", "MAE_VG", "Physics_Violation_MW", "log_dir", "n_samples"];
+        const higherBetter = ['R2_PG', 'R2_VG', 'Pacc_PG', 'Pacc_VG'];
+        const lowerBetter = ['RMSE_PG', 'RMSE_VG', 'MAE_PG', 'MAE_VG', 'Physics_Violation_MW'];
+        
+        const colIndex = {};
+        colNames.forEach((name, idx) => colIndex[name] = idx);
+        
+        $(document).ready(function() {
+            const table = $('#resultsTable').DataTable({
+                data: tableData,
+                columns: columns,
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                order: [[0, 'desc']],
+                scrollX: true,
+                dom: 'Blfrtip',
+                buttons: [
+                    { extend: 'copy', text: '📋 Copy' },
+                    { extend: 'csv', text: '📄 CSV' },
+                    { extend: 'excel', text: '📊 Excel' },
+                    { extend: 'pdf', text: '📑 PDF', orientation: 'landscape' },
+                    { extend: 'print', text: '🖨️ Print' }
+                ],
+                createdRow: function(row, data, dataIndex) {
+                    higherBetter.forEach(function(colName) {
+                        if (colIndex[colName] !== undefined) {
+                            const idx = colIndex[colName];
+                            const val = parseFloat(String(data[idx]).replace('%', '').replace('★ ', ''));
+                            if (!isNaN(val)) {
+                                const maxVal = Math.max(...tableData.map(r => 
+                                    parseFloat(String(r[idx]).replace('%', '').replace('★ ', '')) || -Infinity
+                                ));
+                                if (val === maxVal) $('td', row).eq(idx).addClass('best-high');
+                            }
+                        }
+                    });
+                    lowerBetter.forEach(function(colName) {
+                        if (colIndex[colName] !== undefined) {
+                            const idx = colIndex[colName];
+                            const val = parseFloat(String(data[idx]).replace('★ ', ''));
+                            if (!isNaN(val)) {
+                                const minVal = Math.min(...tableData.map(r => {
+                                    const v = parseFloat(String(r[idx]).replace('★ ', ''));
+                                    return isNaN(v) ? Infinity : v;
+                                }));
+                                if (val === minVal) $('td', row).eq(idx).addClass('best-low');
+                            }
+                        }
+                    });
+                }
+            });
+            
+            $('#resultsTable tfoot .column-filter').on('keyup change', function() {
+                table.column($(this).parent().index()).search(this.value).draw();
+            });
+            
+            // Stats
+            const models = [...new Set(tableData.map(r => r[colIndex['model']]))].filter(Boolean);
+            let statsHtml = `<div class="stat-card"><div class="label">Total</div><div class="value">${tableData.length}</div></div>`;
+            statsHtml += `<div class="stat-card"><div class="label">Models</div><div class="value">${models.join(', ')}</div></div>`;
+            if (colIndex['R2_PG'] !== undefined) {
+                const vals = tableData.map(r => parseFloat(String(r[colIndex['R2_PG']]).replace('★ ', ''))).filter(v => !isNaN(v));
+                if (vals.length) statsHtml += `<div class="stat-card"><div class="label">Best R² PG</div><div class="value">${Math.max(...vals).toFixed(4)}</div></div>`;
+            }
+            if (colIndex['Physics_Violation_MW'] !== undefined) {
+                const vals = tableData.map(r => parseFloat(String(r[colIndex['Physics_Violation_MW']]).replace('★ ', ''))).filter(v => !isNaN(v));
+                if (vals.length) statsHtml += `<div class="stat-card"><div class="label">Best Physics</div><div class="value">${Math.min(...vals).toFixed(2)} MW</div></div>`;
+            }
+            $('#statsRow').html(statsHtml);
+        });
+    </script>
+</body>
+</html>

@@ -151,8 +151,10 @@ weekly_assignments/Week3/samples/
 weekly_assignments/Week3/results/
 weekly_assignments/Week3/~$*.xlsx
 
-# Outputs directory
+# Outputs directory (except experiment logs)
 outputs/
+!outputs/*.csv
+!outputs/*.html
 
 # Overnight/long-running test results
 overnight_results.txt
