@@ -502,7 +502,7 @@ def render_settings_tab():
 
     # Learning Rate Scheduler
     st.subheader("📉 Learning Rate Scheduler")
-    
+
     lr_scheduler = st.selectbox(
         "Scheduler Type",
         options=["", "plateau", "cosine"],
@@ -513,11 +513,11 @@ def render_settings_tab():
         }.get(x, x),
         help="LR scheduler to help escape training plateaus",
     )
-    
+
     lr_scheduler_patience = 50
     lr_scheduler_factor = 0.5
     min_lr = 1e-6
-    
+
     if lr_scheduler == "plateau":
         col1, col2, col3 = st.columns(3)
         with col1:

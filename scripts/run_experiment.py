@@ -261,7 +261,9 @@ def generate_gcnn_train_command(
     # Add LR scheduler if specified
     if cfg.lr_scheduler:
         cmd_parts.append(f"model.task.lr_scheduler={cfg.lr_scheduler}")
-        cmd_parts.append(f"model.task.lr_scheduler_patience={cfg.lr_scheduler_patience}")
+        cmd_parts.append(
+            f"model.task.lr_scheduler_patience={cfg.lr_scheduler_patience}"
+        )
         cmd_parts.append(f"model.task.lr_scheduler_factor={cfg.lr_scheduler_factor}")
         cmd_parts.append(f"model.task.min_lr={cfg.min_lr}")
 
@@ -293,7 +295,9 @@ def generate_dnn_train_command(cfg: DNNConfig) -> str:
     # Add LR scheduler if specified
     if cfg.lr_scheduler:
         cmd_parts.append(f"model.task.lr_scheduler={cfg.lr_scheduler}")
-        cmd_parts.append(f"model.task.lr_scheduler_patience={cfg.lr_scheduler_patience}")
+        cmd_parts.append(
+            f"model.task.lr_scheduler_patience={cfg.lr_scheduler_patience}"
+        )
         cmd_parts.append(f"model.task.lr_scheduler_factor={cfg.lr_scheduler_factor}")
         cmd_parts.append(f"model.task.min_lr={cfg.min_lr}")
 
