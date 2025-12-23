@@ -41,12 +41,16 @@ GCNN_CSV_COLUMNS = [
     "Pacc_PG_seen",
     "Pacc_VG_seen",
     "Physics_MW_seen",
+    "PG_Viol_Rate_seen",
+    "VG_Viol_Rate_seen",
     # Evaluation on UNSEEN dataset (1200 samples)
     "R2_PG_unseen",
     "R2_VG_unseen",
     "Pacc_PG_unseen",
     "Pacc_VG_unseen",
     "Physics_MW_unseen",
+    "PG_Viol_Rate_unseen",
+    "VG_Viol_Rate_unseen",
     # Paths
     "ckpt_path",
     "log_dir",
@@ -77,12 +81,16 @@ DNN_CSV_COLUMNS = [
     "Pacc_PG_seen",
     "Pacc_VG_seen",
     "Physics_MW_seen",
+    "PG_Viol_Rate_seen",
+    "VG_Viol_Rate_seen",
     # Evaluation on UNSEEN dataset (1200 samples)
     "R2_PG_unseen",
     "R2_VG_unseen",
     "Pacc_PG_unseen",
     "Pacc_VG_unseen",
     "Physics_MW_unseen",
+    "PG_Viol_Rate_unseen",
+    "VG_Viol_Rate_unseen",
     # Paths
     "ckpt_path",
     "log_dir",
@@ -195,6 +203,8 @@ class ExperimentRow:
         pacc_pg: float,
         pacc_vg: float,
         physics_mw: float,
+        pg_viol_rate: Optional[float] = None,
+        vg_viol_rate: Optional[float] = None,
     ) -> "ExperimentRow":
         """Set evaluation results on seen (test) dataset."""
         self.data["R2_PG_seen"] = _format_metric(r2_pg, decimals=4)
@@ -202,6 +212,8 @@ class ExperimentRow:
         self.data["Pacc_PG_seen"] = _format_metric(pacc_pg, decimals=2)
         self.data["Pacc_VG_seen"] = _format_metric(pacc_vg, decimals=2)
         self.data["Physics_MW_seen"] = _format_metric(physics_mw, decimals=2)
+        self.data["PG_Viol_Rate_seen"] = _format_metric(pg_viol_rate, decimals=2) if pg_viol_rate is not None else ""
+        self.data["VG_Viol_Rate_seen"] = _format_metric(vg_viol_rate, decimals=2) if vg_viol_rate is not None else ""
         return self
 
     def set_eval_unseen(
@@ -211,6 +223,8 @@ class ExperimentRow:
         pacc_pg: float,
         pacc_vg: float,
         physics_mw: float,
+        pg_viol_rate: Optional[float] = None,
+        vg_viol_rate: Optional[float] = None,
     ) -> "ExperimentRow":
         """Set evaluation results on unseen dataset."""
         self.data["R2_PG_unseen"] = _format_metric(r2_pg, decimals=4)
@@ -218,6 +232,8 @@ class ExperimentRow:
         self.data["Pacc_PG_unseen"] = _format_metric(pacc_pg, decimals=2)
         self.data["Pacc_VG_unseen"] = _format_metric(pacc_vg, decimals=2)
         self.data["Physics_MW_unseen"] = _format_metric(physics_mw, decimals=2)
+        self.data["PG_Viol_Rate_unseen"] = _format_metric(pg_viol_rate, decimals=2) if pg_viol_rate is not None else ""
+        self.data["VG_Viol_Rate_unseen"] = _format_metric(vg_viol_rate, decimals=2) if vg_viol_rate is not None else ""
         return self
 
     def to_dict(self) -> dict[str, Any]:

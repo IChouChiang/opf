@@ -657,11 +657,15 @@ def render_results_tab():
             "Pacc_PG_seen",
             "Pacc_VG_seen",
             "Physics_MW_seen",
+            "PG_Viol_Rate_seen",
+            "VG_Viol_Rate_seen",
             "R2_PG_unseen",
             "R2_VG_unseen",
             "Pacc_PG_unseen",
             "Pacc_VG_unseen",
             "Physics_MW_unseen",
+            "PG_Viol_Rate_unseen",
+            "VG_Viol_Rate_unseen",
             "best_val_loss",
             "duration_sec",
             "ckpt_path",
@@ -700,9 +704,11 @@ def render_results_tab():
         "R2_PG_seen",
         "Pacc_PG_seen",
         "Physics_MW_seen",
+        "PG_Viol_Rate_seen",
         "R2_PG_unseen",
         "Pacc_PG_unseen",
         "Physics_MW_unseen",
+        "PG_Viol_Rate_unseen",
     ]
     display_cols = [c for c in display_cols if c in df.columns]
 
@@ -723,11 +729,13 @@ def render_results_tab():
         "params": "Params",
         "arch": "Arch",
         "R2_PG_seen": "R²(P) Seen",
-        "Pacc_PG_seen": "Pacc(P) Seen",
+        "Pacc_PG_seen": "Pacc Seen",
         "Physics_MW_seen": "Phys Seen",
+        "PG_Viol_Rate_seen": "PG Viol% Seen",
         "R2_PG_unseen": "R²(P) Unseen",
-        "Pacc_PG_unseen": "Pacc(P) Unseen",
+        "Pacc_PG_unseen": "Pacc Unseen",
         "Physics_MW_unseen": "Phys Unseen",
+        "PG_Viol_Rate_unseen": "PG Viol% Unseen",
     }
     display_df = display_df.rename(columns=column_names)
 
@@ -776,6 +784,13 @@ def render_results_tab():
                 )
                 st.text(
                     f"Physics: {row.get('Physics_MW_seen', 'N/A')} / {row.get('Physics_MW_unseen', 'N/A')} MW"
+                )
+                st.markdown("**Constraint Violations (Seen / Unseen)**")
+                st.text(
+                    f"PG Viol Rate: {row.get('PG_Viol_Rate_seen', 'N/A')}% / {row.get('PG_Viol_Rate_unseen', 'N/A')}%"
+                )
+                st.text(
+                    f"VG Viol Rate: {row.get('VG_Viol_Rate_seen', 'N/A')}% / {row.get('VG_Viol_Rate_unseen', 'N/A')}%"
                 )
 
             st.markdown("**Checkpoint**")

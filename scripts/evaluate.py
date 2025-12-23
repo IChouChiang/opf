@@ -48,6 +48,45 @@ BASE_MVA = 100.0  # Standard base power for p.u. conversion
 PG_THRESHOLD_PU = 0.01  # 1 MW = 0.01 p.u. (assuming BaseMVA=100)
 VG_THRESHOLD_PU = 0.001  # 0.001 p.u. for voltage
 
+# Physical limits from PYPOWER case files (in MW and p.u.)
+# These are loaded dynamically based on case, but defaults for case39:
+CASE39_PG_LIMITS_MW = {
+    # gen_idx: (Pmin, Pmax)
+    0: (0, 1040), 1: (0, 646), 2: (0, 725), 3: (0, 652), 4: (0, 508),
+    5: (0, 687), 6: (0, 580), 7: (0, 564), 8: (0, 865), 9: (0, 1100),
+}
+CASE39_V_LIMITS_PU = (0.94, 1.06)  # (Vmin, Vmax) for all buses
+
+
+def get_physical_limits(case_name: str) -> dict:
+    """Get physical limits for a given case."""
+    if case_name == "case39":
+        return {
+            "pg_min_pu": np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) / BASE_MVA,
+            "pg_max_pu": np.array([1040, 646, 725, 652, 508, 687, 580, 564, 865, 1100]) / BASE_MVA,
+            "vg_min_pu": 0.94,
+            "vg_max_pu": 1.06,
+        }
+    elif case_name == "case6ww" or case_name == "case6":
+        # Wood & Wollenberg 6-bus case
+        # Generator VG setpoints from PYPOWER: [1.05, 1.05, 1.07]
+        # Use per-generator limits with ±0.02 tolerance around setpoints
+        return {
+            "pg_min_pu": np.array([0, 0, 0]) / BASE_MVA,
+            "pg_max_pu": np.array([200, 150, 180]) / BASE_MVA,
+            # Per-generator voltage limits based on setpoints
+            "vg_min_pu": np.array([1.03, 1.03, 1.05]),  # setpoints - 0.02
+            "vg_max_pu": np.array([1.07, 1.07, 1.09]),  # setpoints + 0.02
+        }
+    else:
+        # Default conservative limits
+        return {
+            "pg_min_pu": None,
+            "pg_max_pu": None,
+            "vg_min_pu": 0.90,
+            "vg_max_pu": 1.10,
+        }
+
 
 # =============================================================================
 # Model Instantiation (reused from train.py)
@@ -172,6 +211,107 @@ def compute_regression_metrics(pred: np.ndarray, true: np.ndarray) -> dict[str, 
         "RMSE": float(np.sqrt(mean_squared_error(true_flat, pred_flat))),
         "MAE": float(mean_absolute_error(true_flat, pred_flat)),
     }
+
+
+def compute_constraint_violations(
+    pg_pred: np.ndarray,
+    vg_pred: np.ndarray,
+    limits: dict,
+) -> dict[str, float]:
+    """
+    Compute constraint violation metrics for PG and VG predictions.
+
+    Checks if predictions violate physical limits:
+    - PG: Generator power output limits [Pmin, Pmax] per generator
+    - VG: Voltage magnitude limits [Vmin, Vmax] for all generators
+
+    Args:
+        pg_pred: Predicted PG [N, n_gen] in p.u.
+        vg_pred: Predicted VG [N, n_gen] in p.u.
+        limits: Dict with pg_min_pu, pg_max_pu, vg_min_pu, vg_max_pu
+
+    Returns:
+        Dict with violation metrics:
+        - pg_violation_rate: % of PG predictions outside limits
+        - pg_violation_avg_mw: Average violation magnitude (MW) when violated
+        - pg_violation_max_mw: Maximum violation (MW)
+        - vg_violation_rate: % of VG predictions outside limits
+        - vg_violation_avg_pu: Average violation magnitude (p.u.) when violated
+        - vg_violation_max_pu: Maximum violation (p.u.)
+    """
+    result = {}
+
+    # PG violations
+    pg_min = limits.get("pg_min_pu")
+    pg_max = limits.get("pg_max_pu")
+
+    if pg_min is not None and pg_max is not None:
+        # Compute violations for each generator
+        # pg_pred: [N, n_gen], pg_min/pg_max: [n_gen]
+        below_min = pg_pred < pg_min[None, :]  # [N, n_gen]
+        above_max = pg_pred > pg_max[None, :]  # [N, n_gen]
+        pg_violated = below_min | above_max
+
+        # Violation rate (% of all predictions)
+        result["pg_violation_rate"] = float(np.mean(pg_violated) * 100.0)
+
+        # Violation magnitude (only for violated predictions)
+        violation_below = np.where(below_min, pg_min[None, :] - pg_pred, 0)
+        violation_above = np.where(above_max, pg_pred - pg_max[None, :], 0)
+        violation_magnitude = violation_below + violation_above  # [N, n_gen]
+
+        if np.any(pg_violated):
+            result["pg_violation_avg_mw"] = float(
+                np.mean(violation_magnitude[pg_violated]) * BASE_MVA
+            )
+            result["pg_violation_max_mw"] = float(
+                np.max(violation_magnitude) * BASE_MVA
+            )
+        else:
+            result["pg_violation_avg_mw"] = 0.0
+            result["pg_violation_max_mw"] = 0.0
+    else:
+        result["pg_violation_rate"] = float("nan")
+        result["pg_violation_avg_mw"] = float("nan")
+        result["pg_violation_max_mw"] = float("nan")
+
+    # VG violations
+    vg_min = limits.get("vg_min_pu")
+    vg_max = limits.get("vg_max_pu")
+
+    if vg_min is not None and vg_max is not None:
+        # Handle both scalar and per-generator array limits
+        if np.isscalar(vg_min):
+            below_min = vg_pred < vg_min
+            above_max = vg_pred > vg_max
+            violation_below = np.where(below_min, vg_min - vg_pred, 0)
+            violation_above = np.where(above_max, vg_pred - vg_max, 0)
+        else:
+            # Per-generator limits: vg_min/vg_max are [n_gen] arrays
+            below_min = vg_pred < vg_min[None, :]  # [N, n_gen]
+            above_max = vg_pred > vg_max[None, :]  # [N, n_gen]
+            violation_below = np.where(below_min, vg_min[None, :] - vg_pred, 0)
+            violation_above = np.where(above_max, vg_pred - vg_max[None, :], 0)
+
+        vg_violated = below_min | above_max
+        result["vg_violation_rate"] = float(np.mean(vg_violated) * 100.0)
+
+        violation_magnitude = violation_below + violation_above
+
+        if np.any(vg_violated):
+            result["vg_violation_avg_pu"] = float(
+                np.mean(violation_magnitude[vg_violated])
+            )
+            result["vg_violation_max_pu"] = float(np.max(violation_magnitude))
+        else:
+            result["vg_violation_avg_pu"] = 0.0
+            result["vg_violation_max_pu"] = 0.0
+    else:
+        result["vg_violation_rate"] = float("nan")
+        result["vg_violation_avg_pu"] = float("nan")
+        result["vg_violation_max_pu"] = float("nan")
+
+    return result
 
 
 def compute_physics_violation(
@@ -516,6 +656,15 @@ def main(cfg: DictConfig) -> None:
             gen_bus_matrix=gen_bus_matrix,
         )
 
+    # Constraint violations (physical limits)
+    print("  Computing constraint violations...")
+    limits = get_physical_limits(cfg.data.name)
+    constraint_violations = compute_constraint_violations(
+        pg_pred=pg_pred_np,
+        vg_pred=vg_pred_np,
+        limits=limits,
+    )
+
     # ==========================================================================
     # 7. Print results
     # ==========================================================================
@@ -542,11 +691,34 @@ def main(cfg: DictConfig) -> None:
     else:
         print("Physics_MW=N/A")
 
+    # Constraint violations
+    print("-" * 70)
+    print("CONSTRAINT VIOLATIONS (Physical Limits)")
+    print("-" * 70)
+    pg_viol_rate = constraint_violations.get("pg_violation_rate", float("nan"))
+    vg_viol_rate = constraint_violations.get("vg_violation_rate", float("nan"))
+    if not np.isnan(pg_viol_rate):
+        print(f"PG_Violation_Rate={pg_viol_rate:.2f}%")
+        print(f"PG_Violation_Avg_MW={constraint_violations['pg_violation_avg_mw']:.2f}")
+        print(f"PG_Violation_Max_MW={constraint_violations['pg_violation_max_mw']:.2f}")
+    else:
+        print("PG_Violation=N/A (no limits defined)")
+    if not np.isnan(vg_viol_rate):
+        print(f"VG_Violation_Rate={vg_viol_rate:.2f}%")
+        print(f"VG_Violation_Avg_PU={constraint_violations['vg_violation_avg_pu']:.4f}")
+        print(f"VG_Violation_Max_PU={constraint_violations['vg_violation_max_pu']:.4f}")
+    else:
+        print("VG_Violation=N/A (no limits defined)")
+
     print("=" * 70)
 
     # ==========================================================================
     # 8. Log evaluation results to CSV
     # ==========================================================================
+    def safe_val(v):
+        """Convert nan to None for CSV logging."""
+        return None if (isinstance(v, float) and np.isnan(v)) else v
+
     metrics = {
         "R2_PG": pg_metrics["R2"],
         "R2_VG": vg_metrics["R2"],
@@ -556,9 +728,14 @@ def main(cfg: DictConfig) -> None:
         "RMSE_VG": vg_metrics["RMSE"],
         "MAE_PG": pg_metrics["MAE"],
         "MAE_VG": vg_metrics["MAE"],
-        "Physics_Violation_MW": (
-            physics_violation_mw if not np.isnan(physics_violation_mw) else None
-        ),
+        "Physics_Violation_MW": safe_val(physics_violation_mw),
+        # Constraint violations
+        "PG_Violation_Rate": safe_val(constraint_violations.get("pg_violation_rate")),
+        "PG_Violation_Avg_MW": safe_val(constraint_violations.get("pg_violation_avg_mw")),
+        "PG_Violation_Max_MW": safe_val(constraint_violations.get("pg_violation_max_mw")),
+        "VG_Violation_Rate": safe_val(constraint_violations.get("vg_violation_rate")),
+        "VG_Violation_Avg_PU": safe_val(constraint_violations.get("vg_violation_avg_pu")),
+        "VG_Violation_Max_PU": safe_val(constraint_violations.get("vg_violation_max_pu")),
     }
 
     log_evaluation_to_csv(

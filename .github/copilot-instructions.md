@@ -215,6 +215,21 @@ Using κ > 0 in training:
 - **Decreases physics violation** - predictions are more physically consistent
 - **Recommended:** Small κ (0.01-0.1) for balance; a solution with R²=0.95 + Physics_MW=50 is more useful than R²=0.99 + Physics_MW=300
 
+### Constraint Violation Metrics
+Measures percentage of predictions that violate physical operating limits from PYPOWER case data.
+
+| Metric | Description |
+|--------|-------------|
+| **PG_Violation_Rate** | % of generator outputs outside [Pmin, Pmax] limits |
+| **VG_Violation_Rate** | % of voltage predictions outside [Vmin, Vmax] limits |
+
+**Physical Limits by Case:**
+- **case39:** PG limits per generator (0 to 508-1100 MW), VG limits [0.94, 1.06] p.u.
+- **case6ww:** PG limits per generator (0 to 150-200 MW), VG per-generator setpoints ±0.02 tolerance
+
+**Good values:** < 5% violation rate
+**Interpretation:** 0% = all predictions feasible; >10% = model needs constraint enforcement
+
 ## Project-Specific Rules
 
 ### When Working with Units
