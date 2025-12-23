@@ -52,8 +52,16 @@ VG_THRESHOLD_PU = 0.001  # 0.001 p.u. for voltage
 # These are loaded dynamically based on case, but defaults for case39:
 CASE39_PG_LIMITS_MW = {
     # gen_idx: (Pmin, Pmax)
-    0: (0, 1040), 1: (0, 646), 2: (0, 725), 3: (0, 652), 4: (0, 508),
-    5: (0, 687), 6: (0, 580), 7: (0, 564), 8: (0, 865), 9: (0, 1100),
+    0: (0, 1040),
+    1: (0, 646),
+    2: (0, 725),
+    3: (0, 652),
+    4: (0, 508),
+    5: (0, 687),
+    6: (0, 580),
+    7: (0, 564),
+    8: (0, 865),
+    9: (0, 1100),
 }
 CASE39_V_LIMITS_PU = (0.94, 1.06)  # (Vmin, Vmax) for all buses
 
@@ -63,7 +71,8 @@ def get_physical_limits(case_name: str) -> dict:
     if case_name == "case39":
         return {
             "pg_min_pu": np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) / BASE_MVA,
-            "pg_max_pu": np.array([1040, 646, 725, 652, 508, 687, 580, 564, 865, 1100]) / BASE_MVA,
+            "pg_max_pu": np.array([1040, 646, 725, 652, 508, 687, 580, 564, 865, 1100])
+            / BASE_MVA,
             "vg_min_pu": 0.94,
             "vg_max_pu": 1.06,
         }
@@ -731,11 +740,19 @@ def main(cfg: DictConfig) -> None:
         "Physics_Violation_MW": safe_val(physics_violation_mw),
         # Constraint violations
         "PG_Violation_Rate": safe_val(constraint_violations.get("pg_violation_rate")),
-        "PG_Violation_Avg_MW": safe_val(constraint_violations.get("pg_violation_avg_mw")),
-        "PG_Violation_Max_MW": safe_val(constraint_violations.get("pg_violation_max_mw")),
+        "PG_Violation_Avg_MW": safe_val(
+            constraint_violations.get("pg_violation_avg_mw")
+        ),
+        "PG_Violation_Max_MW": safe_val(
+            constraint_violations.get("pg_violation_max_mw")
+        ),
         "VG_Violation_Rate": safe_val(constraint_violations.get("vg_violation_rate")),
-        "VG_Violation_Avg_PU": safe_val(constraint_violations.get("vg_violation_avg_pu")),
-        "VG_Violation_Max_PU": safe_val(constraint_violations.get("vg_violation_max_pu")),
+        "VG_Violation_Avg_PU": safe_val(
+            constraint_violations.get("vg_violation_avg_pu")
+        ),
+        "VG_Violation_Max_PU": safe_val(
+            constraint_violations.get("vg_violation_max_pu")
+        ),
     }
 
     log_evaluation_to_csv(

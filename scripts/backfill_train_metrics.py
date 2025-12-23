@@ -63,15 +63,31 @@ def run_evaluation(
 
     # Add architecture params
     if model_type == "gcnn":
-        cmd_parts.append(f"++model.architecture.in_channels={arch_params.get('channels', 8)}")
-        cmd_parts.append(f"++model.architecture.hidden_channels={arch_params.get('channels', 8)}")
-        cmd_parts.append(f"++model.architecture.n_layers={arch_params.get('n_layers', 3)}")
-        cmd_parts.append(f"++model.architecture.fc_hidden_dim={arch_params.get('fc_hidden_dim', 512)}")
-        cmd_parts.append(f"++model.architecture.n_fc_layers={arch_params.get('n_fc_layers', 3)}")
+        cmd_parts.append(
+            f"++model.architecture.in_channels={arch_params.get('channels', 8)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.hidden_channels={arch_params.get('channels', 8)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.n_layers={arch_params.get('n_layers', 3)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.fc_hidden_dim={arch_params.get('fc_hidden_dim', 512)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.n_fc_layers={arch_params.get('n_fc_layers', 3)}"
+        )
     else:  # dnn
-        cmd_parts.append(f"++model.architecture.hidden_dim={arch_params.get('hidden_dim', 128)}")
-        cmd_parts.append(f"++model.architecture.num_layers={arch_params.get('num_layers', 3)}")
-        cmd_parts.append(f"++model.architecture.dropout={arch_params.get('dropout', 0.0)}")
+        cmd_parts.append(
+            f"++model.architecture.hidden_dim={arch_params.get('hidden_dim', 128)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.num_layers={arch_params.get('num_layers', 3)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.dropout={arch_params.get('dropout', 0.0)}"
+        )
 
     cmd = " ".join(cmd_parts)
 
@@ -187,8 +203,12 @@ def backfill_gcnn():
             df.at[idx, "Pacc_PG_train"] = metrics_train.get("Pacc_PG", "")
             df.at[idx, "Pacc_VG_train"] = metrics_train.get("Pacc_VG", "")
             df.at[idx, "Physics_MW_train"] = metrics_train.get("Physics_MW", "")
-            df.at[idx, "PG_Viol_Rate_train"] = metrics_train.get("PG_Violation_Rate", "")
-            df.at[idx, "VG_Viol_Rate_train"] = metrics_train.get("VG_Violation_Rate", "")
+            df.at[idx, "PG_Viol_Rate_train"] = metrics_train.get(
+                "PG_Violation_Rate", ""
+            )
+            df.at[idx, "VG_Viol_Rate_train"] = metrics_train.get(
+                "VG_Violation_Rate", ""
+            )
             print(
                 f"  Train: R2_PG={metrics_train.get('R2_PG', 'N/A'):.4f}, "
                 f"Pacc_PG={metrics_train.get('Pacc_PG', 'N/A'):.2f}%, "
@@ -250,8 +270,12 @@ def backfill_dnn():
             df.at[idx, "Pacc_PG_train"] = metrics_train.get("Pacc_PG", "")
             df.at[idx, "Pacc_VG_train"] = metrics_train.get("Pacc_VG", "")
             df.at[idx, "Physics_MW_train"] = metrics_train.get("Physics_MW", "")
-            df.at[idx, "PG_Viol_Rate_train"] = metrics_train.get("PG_Violation_Rate", "")
-            df.at[idx, "VG_Viol_Rate_train"] = metrics_train.get("VG_Violation_Rate", "")
+            df.at[idx, "PG_Viol_Rate_train"] = metrics_train.get(
+                "PG_Violation_Rate", ""
+            )
+            df.at[idx, "VG_Viol_Rate_train"] = metrics_train.get(
+                "VG_Violation_Rate", ""
+            )
             print(
                 f"  Train: R2_PG={metrics_train.get('R2_PG', 'N/A'):.4f}, "
                 f"Pacc_PG={metrics_train.get('Pacc_PG', 'N/A'):.2f}%, "

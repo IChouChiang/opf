@@ -25,7 +25,7 @@ def run_evaluation(
 ) -> dict:
     """Run evaluation and parse metrics."""
     ckpt_path_obj = Path(ckpt_path)
-    
+
     # Use last.ckpt if the path contains = (which breaks Hydra parsing)
     if "=" in ckpt_path and ckpt_path_obj.parent.exists():
         last_ckpt = ckpt_path_obj.parent / "last.ckpt"
@@ -33,7 +33,7 @@ def run_evaluation(
             print(f"  [INFO] Using last.ckpt instead of {ckpt_path_obj.name}")
             ckpt_path = str(last_ckpt)
             ckpt_path_obj = last_ckpt
-    
+
     if not ckpt_path_obj.exists():
         print(f"  [SKIP] Checkpoint not found: {ckpt_path}")
         return {}
@@ -53,18 +53,34 @@ def run_evaluation(
 
     # Add architecture params
     if model_type == "gcnn":
-        cmd_parts.append(f"++model.architecture.in_channels={arch_params.get('channels', 8)}")
-        cmd_parts.append(f"++model.architecture.hidden_channels={arch_params.get('channels', 8)}")
-        cmd_parts.append(f"++model.architecture.n_layers={arch_params.get('n_layers', 3)}")
-        cmd_parts.append(f"++model.architecture.fc_hidden_dim={arch_params.get('fc_hidden_dim', 512)}")
-        cmd_parts.append(f"++model.architecture.n_fc_layers={arch_params.get('n_fc_layers', 3)}")
+        cmd_parts.append(
+            f"++model.architecture.in_channels={arch_params.get('channels', 8)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.hidden_channels={arch_params.get('channels', 8)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.n_layers={arch_params.get('n_layers', 3)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.fc_hidden_dim={arch_params.get('fc_hidden_dim', 512)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.n_fc_layers={arch_params.get('n_fc_layers', 3)}"
+        )
     else:  # dnn
-        cmd_parts.append(f"++model.architecture.hidden_dim={arch_params.get('hidden_dim', 128)}")
-        cmd_parts.append(f"++model.architecture.num_layers={arch_params.get('num_layers', 3)}")
-        cmd_parts.append(f"++model.architecture.dropout={arch_params.get('dropout', 0.0)}")
+        cmd_parts.append(
+            f"++model.architecture.hidden_dim={arch_params.get('hidden_dim', 128)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.num_layers={arch_params.get('num_layers', 3)}"
+        )
+        cmd_parts.append(
+            f"++model.architecture.dropout={arch_params.get('dropout', 0.0)}"
+        )
 
     cmd = " ".join(cmd_parts)
-    
+
     result = subprocess.run(
         cmd,
         shell=True,
@@ -76,7 +92,7 @@ def run_evaluation(
     # Parse output
     metrics = {}
     output = result.stdout + result.stderr
-    
+
     for line in output.split("\n"):
         line = line.strip()
         if line.startswith("PG_Violation_Rate="):
@@ -102,9 +118,14 @@ def backfill_gcnn():
         return
 
     df = pd.read_csv(GCNN_CSV)
-    
+
     # Add new columns if missing
-    for col in ["PG_Viol_Rate_seen", "VG_Viol_Rate_seen", "PG_Viol_Rate_unseen", "VG_Viol_Rate_unseen"]:
+    for col in [
+        "PG_Viol_Rate_seen",
+        "VG_Viol_Rate_seen",
+        "PG_Viol_Rate_unseen",
+        "VG_Viol_Rate_unseen",
+    ]:
         if col not in df.columns:
             df[col] = None
 
@@ -115,7 +136,10 @@ def backfill_gcnn():
             continue
 
         # Skip if already has violation data
-        if pd.notna(row.get("PG_Viol_Rate_seen")) and row.get("PG_Viol_Rate_seen") != "":
+        if (
+            pd.notna(row.get("PG_Viol_Rate_seen"))
+            and row.get("PG_Viol_Rate_seen") != ""
+        ):
             print(f"  [SKIP] Row {idx} already has violation data")
             continue
 
@@ -126,7 +150,7 @@ def backfill_gcnn():
         n_fc_layers = int(row.get("n_fc_layers", 3))
 
         print(f"\n[{idx+1}/{len(df)}] Evaluating GCNN: {ckpt_path}")
-        
+
         # Determine test files based on dataset
         if dataset == "case6ww":
             seen_file = "samples_test.npz"
@@ -138,30 +162,46 @@ def backfill_gcnn():
         # Eval on seen
         print(f"  Evaluating on {seen_file}...")
         metrics_seen = run_evaluation(
-            "gcnn", dataset, str(PROJECT_ROOT / ckpt_path),
+            "gcnn",
+            dataset,
+            str(PROJECT_ROOT / ckpt_path),
             seen_file,
-            channels=channels, n_layers=n_layers,
-            fc_hidden_dim=fc_hidden_dim, n_fc_layers=n_fc_layers,
+            channels=channels,
+            n_layers=n_layers,
+            fc_hidden_dim=fc_hidden_dim,
+            n_fc_layers=n_fc_layers,
         )
-        
+
         if metrics_seen:
             df.at[idx, "PG_Viol_Rate_seen"] = metrics_seen.get("PG_Violation_Rate", "")
             df.at[idx, "VG_Viol_Rate_seen"] = metrics_seen.get("VG_Violation_Rate", "")
-            print(f"  Seen: PG_Viol={metrics_seen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_seen.get('VG_Violation_Rate', 'N/A')}%")
+            print(
+                f"  Seen: PG_Viol={metrics_seen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_seen.get('VG_Violation_Rate', 'N/A')}%"
+            )
 
         # Eval on unseen
         print(f"  Evaluating on {unseen_file}...")
         metrics_unseen = run_evaluation(
-            "gcnn", dataset, str(PROJECT_ROOT / ckpt_path),
+            "gcnn",
+            dataset,
+            str(PROJECT_ROOT / ckpt_path),
             unseen_file,
-            channels=channels, n_layers=n_layers,
-            fc_hidden_dim=fc_hidden_dim, n_fc_layers=n_fc_layers,
+            channels=channels,
+            n_layers=n_layers,
+            fc_hidden_dim=fc_hidden_dim,
+            n_fc_layers=n_fc_layers,
         )
-        
+
         if metrics_unseen:
-            df.at[idx, "PG_Viol_Rate_unseen"] = metrics_unseen.get("PG_Violation_Rate", "")
-            df.at[idx, "VG_Viol_Rate_unseen"] = metrics_unseen.get("VG_Violation_Rate", "")
-            print(f"  Unseen: PG_Viol={metrics_unseen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_unseen.get('VG_Violation_Rate', 'N/A')}%")
+            df.at[idx, "PG_Viol_Rate_unseen"] = metrics_unseen.get(
+                "PG_Violation_Rate", ""
+            )
+            df.at[idx, "VG_Viol_Rate_unseen"] = metrics_unseen.get(
+                "VG_Violation_Rate", ""
+            )
+            print(
+                f"  Unseen: PG_Viol={metrics_unseen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_unseen.get('VG_Violation_Rate', 'N/A')}%"
+            )
 
         if metrics_seen or metrics_unseen:
             updated += 1
@@ -178,9 +218,14 @@ def backfill_dnn():
         return
 
     df = pd.read_csv(DNN_CSV)
-    
+
     # Add new columns if missing
-    for col in ["PG_Viol_Rate_seen", "VG_Viol_Rate_seen", "PG_Viol_Rate_unseen", "VG_Viol_Rate_unseen"]:
+    for col in [
+        "PG_Viol_Rate_seen",
+        "VG_Viol_Rate_seen",
+        "PG_Viol_Rate_unseen",
+        "VG_Viol_Rate_unseen",
+    ]:
         if col not in df.columns:
             df[col] = None
 
@@ -191,7 +236,10 @@ def backfill_dnn():
             continue
 
         # Skip if already has violation data
-        if pd.notna(row.get("PG_Viol_Rate_seen")) and row.get("PG_Viol_Rate_seen") != "":
+        if (
+            pd.notna(row.get("PG_Viol_Rate_seen"))
+            and row.get("PG_Viol_Rate_seen") != ""
+        ):
             print(f"  [SKIP] Row {idx} already has violation data")
             continue
 
@@ -201,35 +249,51 @@ def backfill_dnn():
         dropout = float(row.get("dropout", 0.0))
 
         print(f"\n[{idx+1}/{len(df)}] Evaluating DNN: {ckpt_path}")
-        
+
         seen_file = "samples_test.npz"
         unseen_file = "samples_unseen.npz"
 
         # Eval on seen
         print(f"  Evaluating on {seen_file}...")
         metrics_seen = run_evaluation(
-            "dnn", dataset, str(PROJECT_ROOT / ckpt_path),
+            "dnn",
+            dataset,
+            str(PROJECT_ROOT / ckpt_path),
             seen_file,
-            hidden_dim=hidden_dim, num_layers=num_layers, dropout=dropout,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            dropout=dropout,
         )
-        
+
         if metrics_seen:
             df.at[idx, "PG_Viol_Rate_seen"] = metrics_seen.get("PG_Violation_Rate", "")
             df.at[idx, "VG_Viol_Rate_seen"] = metrics_seen.get("VG_Violation_Rate", "")
-            print(f"  Seen: PG_Viol={metrics_seen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_seen.get('VG_Violation_Rate', 'N/A')}%")
+            print(
+                f"  Seen: PG_Viol={metrics_seen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_seen.get('VG_Violation_Rate', 'N/A')}%"
+            )
 
         # Eval on unseen
         print(f"  Evaluating on {unseen_file}...")
         metrics_unseen = run_evaluation(
-            "dnn", dataset, str(PROJECT_ROOT / ckpt_path),
+            "dnn",
+            dataset,
+            str(PROJECT_ROOT / ckpt_path),
             unseen_file,
-            hidden_dim=hidden_dim, num_layers=num_layers, dropout=dropout,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            dropout=dropout,
         )
-        
+
         if metrics_unseen:
-            df.at[idx, "PG_Viol_Rate_unseen"] = metrics_unseen.get("PG_Violation_Rate", "")
-            df.at[idx, "VG_Viol_Rate_unseen"] = metrics_unseen.get("VG_Violation_Rate", "")
-            print(f"  Unseen: PG_Viol={metrics_unseen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_unseen.get('VG_Violation_Rate', 'N/A')}%")
+            df.at[idx, "PG_Viol_Rate_unseen"] = metrics_unseen.get(
+                "PG_Violation_Rate", ""
+            )
+            df.at[idx, "VG_Viol_Rate_unseen"] = metrics_unseen.get(
+                "VG_Violation_Rate", ""
+            )
+            print(
+                f"  Unseen: PG_Viol={metrics_unseen.get('PG_Violation_Rate', 'N/A')}%, VG_Viol={metrics_unseen.get('VG_Violation_Rate', 'N/A')}%"
+            )
 
         if metrics_seen or metrics_unseen:
             updated += 1
@@ -243,11 +307,11 @@ if __name__ == "__main__":
     print("=" * 70)
     print("Backfilling Constraint Violation Metrics")
     print("=" * 70)
-    
+
     print("\n--- GCNN Experiments ---")
     backfill_gcnn()
-    
+
     print("\n--- DNN Experiments ---")
     backfill_dnn()
-    
+
     print("\nDone!")
