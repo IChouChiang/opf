@@ -701,6 +701,8 @@ def render_results_tab():
         "dataset",
         "params",
         "arch",
+        "R2_PG_train",
+        "Pacc_PG_train",
         "R2_PG_seen",
         "Pacc_PG_seen",
         "Physics_MW_seen",
@@ -728,6 +730,8 @@ def render_results_tab():
         "dataset": "Data",
         "params": "Params",
         "arch": "Arch",
+        "R2_PG_train": "R²(P) Train",
+        "Pacc_PG_train": "Pacc Train",
         "R2_PG_seen": "R²(P) Seen",
         "Pacc_PG_seen": "Pacc Seen",
         "Physics_MW_seen": "Phys Seen",
@@ -769,28 +773,28 @@ def render_results_tab():
                     st.text(f"Phase: {row.get('phase', 'N/A')}")
 
             with col2:
-                st.markdown("**Evaluation (Seen / Unseen)**")
+                st.markdown("**Evaluation (Train / Seen / Unseen)**")
                 st.text(
-                    f"R²(PG): {row.get('R2_PG_seen', 'N/A')} / {row.get('R2_PG_unseen', 'N/A')}"
+                    f"R²(PG): {row.get('R2_PG_train', 'N/A')} / {row.get('R2_PG_seen', 'N/A')} / {row.get('R2_PG_unseen', 'N/A')}"
                 )
                 st.text(
-                    f"R²(VG): {row.get('R2_VG_seen', 'N/A')} / {row.get('R2_VG_unseen', 'N/A')}"
+                    f"R²(VG): {row.get('R2_VG_train', 'N/A')} / {row.get('R2_VG_seen', 'N/A')} / {row.get('R2_VG_unseen', 'N/A')}"
                 )
                 st.text(
-                    f"Pacc(PG): {row.get('Pacc_PG_seen', 'N/A')}% / {row.get('Pacc_PG_unseen', 'N/A')}%"
+                    f"Pacc(PG): {row.get('Pacc_PG_train', 'N/A')}% / {row.get('Pacc_PG_seen', 'N/A')}% / {row.get('Pacc_PG_unseen', 'N/A')}%"
                 )
                 st.text(
-                    f"Pacc(VG): {row.get('Pacc_VG_seen', 'N/A')}% / {row.get('Pacc_VG_unseen', 'N/A')}%"
+                    f"Pacc(VG): {row.get('Pacc_VG_train', 'N/A')}% / {row.get('Pacc_VG_seen', 'N/A')}% / {row.get('Pacc_VG_unseen', 'N/A')}%"
                 )
                 st.text(
-                    f"Physics: {row.get('Physics_MW_seen', 'N/A')} / {row.get('Physics_MW_unseen', 'N/A')} MW"
+                    f"Physics: {row.get('Physics_MW_train', 'N/A')} / {row.get('Physics_MW_seen', 'N/A')} / {row.get('Physics_MW_unseen', 'N/A')} MW"
                 )
-                st.markdown("**Constraint Violations (Seen / Unseen)**")
+                st.markdown("**Constraint Violations (Train / Seen / Unseen)**")
                 st.text(
-                    f"PG Viol Rate: {row.get('PG_Viol_Rate_seen', 'N/A')}% / {row.get('PG_Viol_Rate_unseen', 'N/A')}%"
+                    f"PG Viol Rate: {row.get('PG_Viol_Rate_train', 'N/A')}% / {row.get('PG_Viol_Rate_seen', 'N/A')}% / {row.get('PG_Viol_Rate_unseen', 'N/A')}%"
                 )
                 st.text(
-                    f"VG Viol Rate: {row.get('VG_Viol_Rate_seen', 'N/A')}% / {row.get('VG_Viol_Rate_unseen', 'N/A')}%"
+                    f"VG Viol Rate: {row.get('VG_Viol_Rate_train', 'N/A')}% / {row.get('VG_Viol_Rate_seen', 'N/A')}% / {row.get('VG_Viol_Rate_unseen', 'N/A')}%"
                 )
 
             st.markdown("**Checkpoint**")

@@ -590,6 +590,84 @@ def run_evaluation(
     return metrics
 
 
+def run_all_evaluations(
+    model_type: str,
+    dataset: str,
+    ckpt_path: str,
+    gpu: int,
+    # GCNN architecture
+    channels: int | None = None,
+    n_layers: int | None = None,
+    fc_hidden_dim: int | None = None,
+    n_fc_layers: int | None = None,
+    # DNN architecture
+    hidden_dim: int | None = None,
+    num_layers: int | None = None,
+    dropout: float | None = None,
+) -> tuple[dict, dict, dict]:
+    """
+    Run evaluation on all three datasets: train, seen (test), and unseen.
+
+    Returns:
+        (metrics_train, metrics_seen, metrics_unseen)
+    """
+    common_args = {
+        "model_type": model_type,
+        "dataset": dataset,
+        "ckpt_path": ckpt_path,
+        "gpu": gpu,
+        "channels": channels,
+        "n_layers": n_layers,
+        "fc_hidden_dim": fc_hidden_dim,
+        "n_fc_layers": n_fc_layers,
+        "hidden_dim": hidden_dim,
+        "num_layers": num_layers,
+        "dropout": dropout,
+    }
+
+    metrics_train = run_evaluation(**common_args, test_file="samples_train.npz")
+    metrics_seen = run_evaluation(**common_args, test_file="samples_test.npz")
+    metrics_unseen = run_evaluation(**common_args, test_file="samples_unseen.npz")
+
+    return metrics_train, metrics_seen, metrics_unseen
+
+
+def set_all_eval_metrics(
+    row: ExperimentRow,
+    metrics_train: dict,
+    metrics_seen: dict,
+    metrics_unseen: dict,
+) -> None:
+    """Set evaluation metrics for all three datasets on an ExperimentRow."""
+    row.set_eval_train(
+        r2_pg=metrics_train["R2_PG"],
+        r2_vg=metrics_train["R2_VG"],
+        pacc_pg=metrics_train["Pacc_PG"],
+        pacc_vg=metrics_train["Pacc_VG"],
+        physics_mw=metrics_train["Physics_MW"],
+        pg_viol_rate=metrics_train.get("PG_Violation_Rate"),
+        vg_viol_rate=metrics_train.get("VG_Violation_Rate"),
+    )
+    row.set_eval_seen(
+        r2_pg=metrics_seen["R2_PG"],
+        r2_vg=metrics_seen["R2_VG"],
+        pacc_pg=metrics_seen["Pacc_PG"],
+        pacc_vg=metrics_seen["Pacc_VG"],
+        physics_mw=metrics_seen["Physics_MW"],
+        pg_viol_rate=metrics_seen.get("PG_Violation_Rate"),
+        vg_viol_rate=metrics_seen.get("VG_Violation_Rate"),
+    )
+    row.set_eval_unseen(
+        r2_pg=metrics_unseen["R2_PG"],
+        r2_vg=metrics_unseen["R2_VG"],
+        pacc_pg=metrics_unseen["Pacc_PG"],
+        pacc_vg=metrics_unseen["Pacc_VG"],
+        physics_mw=metrics_unseen["Physics_MW"],
+        pg_viol_rate=metrics_unseen.get("PG_Violation_Rate"),
+        vg_viol_rate=metrics_unseen.get("VG_Violation_Rate"),
+    )
+
+
 # =============================================================================
 # Main Experiment Runners
 # =============================================================================
@@ -1193,23 +1271,23 @@ def run_dnn_experiment(cfg: DNNConfig) -> None:
         log_dir=ckpt_path.parent.parent,
     )
     row.set_eval_seen(
-            r2_pg=metrics_seen["R2_PG"],
-            r2_vg=metrics_seen["R2_VG"],
-            pacc_pg=metrics_seen["Pacc_PG"],
-            pacc_vg=metrics_seen["Pacc_VG"],
-            physics_mw=metrics_seen["Physics_MW"],
-            pg_viol_rate=metrics_seen.get("PG_Violation_Rate"),
-            vg_viol_rate=metrics_seen.get("VG_Violation_Rate"),
-        )
+        r2_pg=metrics_seen["R2_PG"],
+        r2_vg=metrics_seen["R2_VG"],
+        pacc_pg=metrics_seen["Pacc_PG"],
+        pacc_vg=metrics_seen["Pacc_VG"],
+        physics_mw=metrics_seen["Physics_MW"],
+        pg_viol_rate=metrics_seen.get("PG_Violation_Rate"),
+        vg_viol_rate=metrics_seen.get("VG_Violation_Rate"),
+    )
     row.set_eval_unseen(
-            r2_pg=metrics_unseen["R2_PG"],
-            r2_vg=metrics_unseen["R2_VG"],
-            pacc_pg=metrics_unseen["Pacc_PG"],
-            pacc_vg=metrics_unseen["Pacc_VG"],
-            physics_mw=metrics_unseen["Physics_MW"],
-            pg_viol_rate=metrics_unseen.get("PG_Violation_Rate"),
-            vg_viol_rate=metrics_unseen.get("VG_Violation_Rate"),
-        )
+        r2_pg=metrics_unseen["R2_PG"],
+        r2_vg=metrics_unseen["R2_VG"],
+        pacc_pg=metrics_unseen["Pacc_PG"],
+        pacc_vg=metrics_unseen["Pacc_VG"],
+        physics_mw=metrics_unseen["Physics_MW"],
+        pg_viol_rate=metrics_unseen.get("PG_Violation_Rate"),
+        vg_viol_rate=metrics_unseen.get("VG_Violation_Rate"),
+    )
     log_dnn_experiment(row)
 
     print("\n" + "=" * 70)
@@ -1704,23 +1782,23 @@ def run_dnn_experiment_no_confirm(cfg: DNNConfig) -> None:
         log_dir=ckpt_path.parent.parent,
     )
     row.set_eval_seen(
-            r2_pg=metrics_seen["R2_PG"],
-            r2_vg=metrics_seen["R2_VG"],
-            pacc_pg=metrics_seen["Pacc_PG"],
-            pacc_vg=metrics_seen["Pacc_VG"],
-            physics_mw=metrics_seen["Physics_MW"],
-            pg_viol_rate=metrics_seen.get("PG_Violation_Rate"),
-            vg_viol_rate=metrics_seen.get("VG_Violation_Rate"),
-        )
+        r2_pg=metrics_seen["R2_PG"],
+        r2_vg=metrics_seen["R2_VG"],
+        pacc_pg=metrics_seen["Pacc_PG"],
+        pacc_vg=metrics_seen["Pacc_VG"],
+        physics_mw=metrics_seen["Physics_MW"],
+        pg_viol_rate=metrics_seen.get("PG_Violation_Rate"),
+        vg_viol_rate=metrics_seen.get("VG_Violation_Rate"),
+    )
     row.set_eval_unseen(
-            r2_pg=metrics_unseen["R2_PG"],
-            r2_vg=metrics_unseen["R2_VG"],
-            pacc_pg=metrics_unseen["Pacc_PG"],
-            pacc_vg=metrics_unseen["Pacc_VG"],
-            physics_mw=metrics_unseen["Physics_MW"],
-            pg_viol_rate=metrics_unseen.get("PG_Violation_Rate"),
-            vg_viol_rate=metrics_unseen.get("VG_Violation_Rate"),
-        )
+        r2_pg=metrics_unseen["R2_PG"],
+        r2_vg=metrics_unseen["R2_VG"],
+        pacc_pg=metrics_unseen["Pacc_PG"],
+        pacc_vg=metrics_unseen["Pacc_VG"],
+        physics_mw=metrics_unseen["Physics_MW"],
+        pg_viol_rate=metrics_unseen.get("PG_Violation_Rate"),
+        vg_viol_rate=metrics_unseen.get("VG_Violation_Rate"),
+    )
     log_dnn_experiment(row)
 
     print("  ✓ Logged to CSV")

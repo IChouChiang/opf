@@ -12,7 +12,7 @@ from typing import Any, Optional, Union
 import torch.nn as nn
 
 
-# GCNN CSV Schema - includes seen and unseen evaluation metrics in one row
+# GCNN CSV Schema - includes train, seen and unseen evaluation metrics in one row
 GCNN_CSV_COLUMNS = [
     # Metadata
     "timestamp",
@@ -35,6 +35,14 @@ GCNN_CSV_COLUMNS = [
     # Training results
     "best_val_loss",
     "duration_sec",
+    # Evaluation on TRAIN dataset (10000 samples)
+    "R2_PG_train",
+    "R2_VG_train",
+    "Pacc_PG_train",
+    "Pacc_VG_train",
+    "Physics_MW_train",
+    "PG_Viol_Rate_train",
+    "VG_Viol_Rate_train",
     # Evaluation on SEEN dataset (2000 samples)
     "R2_PG_seen",
     "R2_VG_seen",
@@ -75,6 +83,14 @@ DNN_CSV_COLUMNS = [
     # Training results
     "best_val_loss",
     "duration_sec",
+    # Evaluation on TRAIN dataset (10000 samples)
+    "R2_PG_train",
+    "R2_VG_train",
+    "Pacc_PG_train",
+    "Pacc_VG_train",
+    "Physics_MW_train",
+    "PG_Viol_Rate_train",
+    "VG_Viol_Rate_train",
     # Evaluation on SEEN dataset (2000 samples)
     "R2_PG_seen",
     "R2_VG_seen",
@@ -196,6 +212,30 @@ class ExperimentRow:
         self.data["log_dir"] = str(log_dir) if log_dir else ""
         return self
 
+    def set_eval_train(
+        self,
+        r2_pg: float,
+        r2_vg: float,
+        pacc_pg: float,
+        pacc_vg: float,
+        physics_mw: float,
+        pg_viol_rate: Optional[float] = None,
+        vg_viol_rate: Optional[float] = None,
+    ) -> "ExperimentRow":
+        """Set evaluation results on train dataset (10000 samples)."""
+        self.data["R2_PG_train"] = _format_metric(r2_pg, decimals=4)
+        self.data["R2_VG_train"] = _format_metric(r2_vg, decimals=4)
+        self.data["Pacc_PG_train"] = _format_metric(pacc_pg, decimals=2)
+        self.data["Pacc_VG_train"] = _format_metric(pacc_vg, decimals=2)
+        self.data["Physics_MW_train"] = _format_metric(physics_mw, decimals=2)
+        self.data["PG_Viol_Rate_train"] = (
+            _format_metric(pg_viol_rate, decimals=2) if pg_viol_rate is not None else ""
+        )
+        self.data["VG_Viol_Rate_train"] = (
+            _format_metric(vg_viol_rate, decimals=2) if vg_viol_rate is not None else ""
+        )
+        return self
+
     def set_eval_seen(
         self,
         r2_pg: float,
@@ -212,8 +252,12 @@ class ExperimentRow:
         self.data["Pacc_PG_seen"] = _format_metric(pacc_pg, decimals=2)
         self.data["Pacc_VG_seen"] = _format_metric(pacc_vg, decimals=2)
         self.data["Physics_MW_seen"] = _format_metric(physics_mw, decimals=2)
-        self.data["PG_Viol_Rate_seen"] = _format_metric(pg_viol_rate, decimals=2) if pg_viol_rate is not None else ""
-        self.data["VG_Viol_Rate_seen"] = _format_metric(vg_viol_rate, decimals=2) if vg_viol_rate is not None else ""
+        self.data["PG_Viol_Rate_seen"] = (
+            _format_metric(pg_viol_rate, decimals=2) if pg_viol_rate is not None else ""
+        )
+        self.data["VG_Viol_Rate_seen"] = (
+            _format_metric(vg_viol_rate, decimals=2) if vg_viol_rate is not None else ""
+        )
         return self
 
     def set_eval_unseen(
@@ -232,8 +276,12 @@ class ExperimentRow:
         self.data["Pacc_PG_unseen"] = _format_metric(pacc_pg, decimals=2)
         self.data["Pacc_VG_unseen"] = _format_metric(pacc_vg, decimals=2)
         self.data["Physics_MW_unseen"] = _format_metric(physics_mw, decimals=2)
-        self.data["PG_Viol_Rate_unseen"] = _format_metric(pg_viol_rate, decimals=2) if pg_viol_rate is not None else ""
-        self.data["VG_Viol_Rate_unseen"] = _format_metric(vg_viol_rate, decimals=2) if vg_viol_rate is not None else ""
+        self.data["PG_Viol_Rate_unseen"] = (
+            _format_metric(pg_viol_rate, decimals=2) if pg_viol_rate is not None else ""
+        )
+        self.data["VG_Viol_Rate_unseen"] = (
+            _format_metric(vg_viol_rate, decimals=2) if vg_viol_rate is not None else ""
+        )
         return self
 
     def to_dict(self) -> dict[str, Any]:
