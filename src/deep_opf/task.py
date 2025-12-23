@@ -52,6 +52,10 @@ class OPFTask(pl.LightningModule):
         weight_decay: float = 1e-4,
         gen_bus_indices: list[int] | None = None,
         n_bus: int | None = None,
+        lr_scheduler: str | None = None,
+        lr_scheduler_patience: int = 50,
+        lr_scheduler_factor: float = 0.5,
+        min_lr: float = 1e-6,
     ):
         super().__init__()
 
@@ -59,6 +63,10 @@ class OPFTask(pl.LightningModule):
         self.lr = lr
         self.kappa = kappa
         self.weight_decay = weight_decay
+        self.lr_scheduler_type = lr_scheduler
+        self.lr_scheduler_patience = lr_scheduler_patience
+        self.lr_scheduler_factor = lr_scheduler_factor
+        self.min_lr = min_lr
 
         # Store for physics loss computation
         self.gen_bus_indices = gen_bus_indices
@@ -216,10 +224,49 @@ class OPFTask(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        """Configure Adam optimizer."""
+        """Configure Adam optimizer with optional LR scheduler."""
         optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.lr,
             weight_decay=self.weight_decay,
         )
-        return optimizer
+
+        if self.lr_scheduler_type is None:
+            return optimizer
+
+        if self.lr_scheduler_type == "plateau":
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                factor=self.lr_scheduler_factor,
+                patience=self.lr_scheduler_patience,
+                min_lr=self.min_lr,
+                verbose=True,
+            )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "monitor": "val/loss",
+                    "interval": "epoch",
+                    "frequency": 1,
+                },
+            }
+        elif self.lr_scheduler_type == "cosine":
+            # CosineAnnealingWarmRestarts: T_0=100 epochs per restart
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                optimizer,
+                T_0=100,
+                T_mult=2,
+                eta_min=self.min_lr,
+            )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "interval": "epoch",
+                    "frequency": 1,
+                },
+            }
+        else:
+            raise ValueError(f"Unknown lr_scheduler: {self.lr_scheduler_type}")

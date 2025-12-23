@@ -17,3 +17,8 @@ task:
   lr: ${train.lr}
   kappa: 0.1
   weight_decay: ${train.weight_decay}
+  # Learning rate scheduler (optional)
+  lr_scheduler: null  # "plateau", "cosine", or null for none
+  lr_scheduler_patience: 50  # For ReduceLROnPlateau
+  lr_scheduler_factor: 0.5  # For ReduceLROnPlateau
+  min_lr: 1.0e-6  # Minimum LR

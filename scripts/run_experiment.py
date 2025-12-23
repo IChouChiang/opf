@@ -146,6 +146,12 @@ class GCNNConfig:
     phase2_only: bool = False
     warm_start_ckpt: str = ""
 
+    # Learning rate scheduler
+    lr_scheduler: str = ""  # "plateau", "cosine", or "" for none
+    lr_scheduler_patience: int = 50
+    lr_scheduler_factor: float = 0.5
+    min_lr: float = 1e-6
+
     # GPU
     gpu: int = 0
 
@@ -168,6 +174,12 @@ class DNNConfig:
     patience: int = 20
     dropout: float = 0.1
     max_epochs: int = 100
+
+    # Learning rate scheduler
+    lr_scheduler: str = ""  # "plateau", "cosine", or "" for none
+    lr_scheduler_patience: int = 50
+    lr_scheduler_factor: float = 0.5
+    min_lr: float = 1e-6
 
     # GPU
     gpu: int = 0
@@ -246,6 +258,13 @@ def generate_gcnn_train_command(
         f"model.task.kappa={kappa}",
     ]
 
+    # Add LR scheduler if specified
+    if cfg.lr_scheduler:
+        cmd_parts.append(f"model.task.lr_scheduler={cfg.lr_scheduler}")
+        cmd_parts.append(f"model.task.lr_scheduler_patience={cfg.lr_scheduler_patience}")
+        cmd_parts.append(f"model.task.lr_scheduler_factor={cfg.lr_scheduler_factor}")
+        cmd_parts.append(f"model.task.min_lr={cfg.min_lr}")
+
     if warm_start_ckpt:
         cmd_parts.append(f'"+train.warm_start_ckpt={warm_start_ckpt}"')
 
@@ -270,6 +289,13 @@ def generate_dnn_train_command(cfg: DNNConfig) -> str:
         f"train.patience={cfg.patience}",
         f"train.max_epochs={cfg.max_epochs}",
     ]
+
+    # Add LR scheduler if specified
+    if cfg.lr_scheduler:
+        cmd_parts.append(f"model.task.lr_scheduler={cfg.lr_scheduler}")
+        cmd_parts.append(f"model.task.lr_scheduler_patience={cfg.lr_scheduler_patience}")
+        cmd_parts.append(f"model.task.lr_scheduler_factor={cfg.lr_scheduler_factor}")
+        cmd_parts.append(f"model.task.min_lr={cfg.min_lr}")
 
     return " ".join(cmd_parts)
 
@@ -1930,6 +1956,33 @@ Examples:
         help="DNN: number of hidden layers (sweep: 2,3,4)",
     )
 
+    # Learning rate scheduler options
+    parser.add_argument(
+        "--lr_scheduler",
+        type=str,
+        default="",
+        choices=["", "plateau", "cosine"],
+        help="LR scheduler type: 'plateau' (ReduceLROnPlateau), 'cosine' (CosineAnnealingWarmRestarts), or empty for none",
+    )
+    parser.add_argument(
+        "--lr_scheduler_patience",
+        type=int,
+        default=50,
+        help="LR scheduler: patience for ReduceLROnPlateau (default: 50)",
+    )
+    parser.add_argument(
+        "--lr_scheduler_factor",
+        type=float,
+        default=0.5,
+        help="LR scheduler: factor for ReduceLROnPlateau (default: 0.5)",
+    )
+    parser.add_argument(
+        "--min_lr",
+        type=float,
+        default=1e-6,
+        help="LR scheduler: minimum learning rate (default: 1e-6)",
+    )
+
     # Dry run option
     parser.add_argument(
         "--dry-run",
@@ -2159,6 +2212,10 @@ def main():
                 kappa=float(args.kappa),
                 phase2_only=getattr(args, "phase2_only", False),
                 warm_start_ckpt=getattr(args, "warm_start_ckpt", ""),
+                lr_scheduler=args.lr_scheduler,
+                lr_scheduler_patience=args.lr_scheduler_patience,
+                lr_scheduler_factor=args.lr_scheduler_factor,
+                min_lr=args.min_lr,
                 gpu=args.gpu,
             )
             if args.dry_run:
@@ -2181,6 +2238,10 @@ def main():
                 patience=args.patience,
                 dropout=args.dropout,
                 max_epochs=int(args.max_epochs),
+                lr_scheduler=args.lr_scheduler,
+                lr_scheduler_patience=args.lr_scheduler_patience,
+                lr_scheduler_factor=args.lr_scheduler_factor,
+                min_lr=args.min_lr,
                 gpu=args.gpu,
             )
             if args.dry_run:

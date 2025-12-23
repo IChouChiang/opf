@@ -171,6 +171,12 @@ def instantiate_task(
     Returns:
         Configured OPFTask
     """
+    # Get scheduler params with defaults for backward compatibility
+    lr_scheduler = getattr(cfg.model.task, "lr_scheduler", None)
+    lr_scheduler_patience = getattr(cfg.model.task, "lr_scheduler_patience", 50)
+    lr_scheduler_factor = getattr(cfg.model.task, "lr_scheduler_factor", 0.5)
+    min_lr = getattr(cfg.model.task, "min_lr", 1e-6)
+
     task = OPFTask(
         model=model,
         lr=cfg.model.task.lr,
@@ -178,11 +184,17 @@ def instantiate_task(
         weight_decay=cfg.model.task.weight_decay,
         gen_bus_indices=gen_bus_indices,
         n_bus=n_bus,
+        lr_scheduler=lr_scheduler,
+        lr_scheduler_patience=lr_scheduler_patience,
+        lr_scheduler_factor=lr_scheduler_factor,
+        min_lr=min_lr,
     )
 
+    scheduler_info = f", lr_scheduler={lr_scheduler}" if lr_scheduler else ""
     print(
         f"Instantiated OPFTask: lr={cfg.model.task.lr}, "
         f"kappa={cfg.model.task.kappa}, weight_decay={cfg.model.task.weight_decay}"
+        f"{scheduler_info}"
     )
 
     return task

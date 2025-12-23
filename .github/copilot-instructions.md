@@ -67,7 +67,7 @@ PYPOWER case dict → ext2int → makeYbus → extract G,B → dict params → P
 conda activate opf311
 python -m streamlit run app/experiment_dashboard.py
 ```
-- Settings tab: Configure model type (GCNN/DNN), architecture, training hyperparams
+- Settings tab: Configure model type (GCNN/DNN), architecture, training hyperparams, LR scheduler
 - Results tab: View experiment history from CSV logs
 - Copy generated command to terminal for execution
 
@@ -79,9 +79,19 @@ python scripts/run_experiment.py gcnn case39 --channels 8 --two-phase --kappa 0.
 # DNN baseline
 python scripts/run_experiment.py dnn case39 --hidden_dim 128 --num_layers 3
 
+# With LR scheduler (recommended for long training)
+python scripts/run_experiment.py gcnn case39 --channels 10 --n_layers 4 --fc_hidden_dim 512 --n_fc_layers 3 --lr 0.001 --max_epochs 2000 --patience 500 --lr_scheduler plateau --lr_scheduler_patience 50 --min_lr 1e-5
+
 # Dry-run to preview command without execution
 python scripts/run_experiment.py gcnn case39 --dry-run
 ```
+
+**LR Scheduler Options:**
+- `--lr_scheduler plateau` - ReduceLROnPlateau: reduces LR when validation loss stops improving
+- `--lr_scheduler cosine` - CosineAnnealingWarmRestarts: periodic restarts with cosine annealing
+- `--lr_scheduler_patience 50` - epochs to wait before reducing LR (plateau only)
+- `--lr_scheduler_factor 0.5` - multiply LR by this factor (plateau only)
+- `--min_lr 1e-6` - minimum learning rate
 
 **Key Files:**
 - `app/experiment_dashboard.py` - Streamlit web UI

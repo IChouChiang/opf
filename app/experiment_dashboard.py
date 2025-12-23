@@ -160,6 +160,10 @@ def generate_gcnn_command(
     shell: str = "bash",
     phase2_only: bool = False,
     warm_start_ckpt: str = "",
+    lr_scheduler: str = "",
+    lr_scheduler_patience: int = 50,
+    lr_scheduler_factor: float = 0.5,
+    min_lr: float = 1e-6,
 ) -> str:
     """Generate CLI command for GCNN experiment."""
     cmd_parts = [
@@ -200,6 +204,14 @@ def generate_gcnn_command(
         cmd_parts.append(f"--max_epochs {max_epochs}")
         cmd_parts.append(f"--kappa {kappa}")
 
+    # Add LR scheduler options
+    if lr_scheduler:
+        cmd_parts.append(f"--lr_scheduler {lr_scheduler}")
+        if lr_scheduler == "plateau":
+            cmd_parts.append(f"--lr_scheduler_patience {lr_scheduler_patience}")
+            cmd_parts.append(f"--lr_scheduler_factor {lr_scheduler_factor}")
+        cmd_parts.append(f"--min_lr {min_lr}")
+
     return format_command(cmd_parts, shell)
 
 
@@ -215,6 +227,10 @@ def generate_dnn_command(
     max_epochs: str,  # Now string for sweep support
     gpu: int,
     shell: str = "bash",
+    lr_scheduler: str = "",
+    lr_scheduler_patience: int = 50,
+    lr_scheduler_factor: float = 0.5,
+    min_lr: float = 1e-6,
 ) -> str:
     """Generate CLI command for DNN experiment."""
     cmd_parts = [
@@ -230,6 +246,14 @@ def generate_dnn_command(
         f"--max_epochs {max_epochs}",
         f"--gpu {gpu}",
     ]
+
+    # Add LR scheduler options
+    if lr_scheduler:
+        cmd_parts.append(f"--lr_scheduler {lr_scheduler}")
+        if lr_scheduler == "plateau":
+            cmd_parts.append(f"--lr_scheduler_patience {lr_scheduler_patience}")
+            cmd_parts.append(f"--lr_scheduler_factor {lr_scheduler_factor}")
+        cmd_parts.append(f"--min_lr {min_lr}")
 
     return format_command(cmd_parts, shell)
 
@@ -476,6 +500,66 @@ def render_settings_tab():
 
     st.divider()
 
+    # Learning Rate Scheduler
+    st.subheader("📉 Learning Rate Scheduler")
+    
+    lr_scheduler = st.selectbox(
+        "Scheduler Type",
+        options=["", "plateau", "cosine"],
+        format_func=lambda x: {
+            "": "None (constant LR)",
+            "plateau": "ReduceLROnPlateau (reduce when stuck)",
+            "cosine": "CosineAnnealingWarmRestarts (periodic restarts)",
+        }.get(x, x),
+        help="LR scheduler to help escape training plateaus",
+    )
+    
+    lr_scheduler_patience = 50
+    lr_scheduler_factor = 0.5
+    min_lr = 1e-6
+    
+    if lr_scheduler == "plateau":
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            lr_scheduler_patience = st.number_input(
+                "Scheduler Patience",
+                min_value=10,
+                max_value=200,
+                value=50,
+                step=10,
+                help="Epochs to wait before reducing LR",
+            )
+        with col2:
+            lr_scheduler_factor = st.number_input(
+                "Reduction Factor",
+                min_value=0.1,
+                max_value=0.9,
+                value=0.5,
+                step=0.1,
+                format="%.1f",
+                help="Multiply LR by this factor when reducing",
+            )
+        with col3:
+            min_lr = st.number_input(
+                "Minimum LR",
+                min_value=1e-7,
+                max_value=1e-4,
+                value=1e-6,
+                format="%.1e",
+                help="Stop reducing LR below this value",
+            )
+    elif lr_scheduler == "cosine":
+        min_lr = st.number_input(
+            "Minimum LR (eta_min)",
+            min_value=1e-7,
+            max_value=1e-4,
+            value=1e-6,
+            format="%.1e",
+            help="Minimum LR at the end of each cosine cycle",
+        )
+
+    st.divider()
+
     # Hardware
     st.subheader("🖥️ Hardware")
     gpu = st.number_input(
@@ -568,6 +652,10 @@ def render_settings_tab():
             shell=shell,
             phase2_only=phase2_only,
             warm_start_ckpt=warm_start_ckpt,
+            lr_scheduler=lr_scheduler,
+            lr_scheduler_patience=lr_scheduler_patience,
+            lr_scheduler_factor=lr_scheduler_factor,
+            min_lr=min_lr,
         )
     else:
         command = generate_dnn_command(
@@ -582,6 +670,10 @@ def render_settings_tab():
             max_epochs=max_epochs,
             gpu=gpu,
             shell=shell,
+            lr_scheduler=lr_scheduler,
+            lr_scheduler_patience=lr_scheduler_patience,
+            lr_scheduler_factor=lr_scheduler_factor,
+            min_lr=min_lr,
         )
 
     st.code(command, language="powershell" if shell == "powershell" else "bash")
@@ -652,6 +744,15 @@ def render_results_tab():
             "max_epochs",
             "kappa",
             "phase",
+            # Train metrics
+            "R2_PG_train",
+            "R2_VG_train",
+            "Pacc_PG_train",
+            "Pacc_VG_train",
+            "Physics_MW_train",
+            "PG_Viol_Rate_train",
+            "VG_Viol_Rate_train",
+            # Seen metrics
             "R2_PG_seen",
             "R2_VG_seen",
             "Pacc_PG_seen",
@@ -659,6 +760,7 @@ def render_results_tab():
             "Physics_MW_seen",
             "PG_Viol_Rate_seen",
             "VG_Viol_Rate_seen",
+            # Unseen metrics
             "R2_PG_unseen",
             "R2_VG_unseen",
             "Pacc_PG_unseen",
